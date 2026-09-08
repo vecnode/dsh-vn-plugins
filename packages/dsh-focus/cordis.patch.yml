@@ -1,0 +1,20 @@
+# dsh-focus bundle layer (alpha).
+#
+# Applied on top of the shipped web bundle rows. A patch replaces a targeted
+# row's whole `config` value, and rows inserted here resolve package names
+# from the profile's node_modules (the installed bundle).
+
+# The Focus panel lists conversation folders through the session file
+# reference remote (`@file` search service). Directory-scoped queries list
+# live state but the stock row caps every answer at 20 rows; restating the
+# row raises the cap so a real folder listing is not truncated. All other
+# keys keep their schema defaults.
+- id: file-reference-local
+  config:
+    maxResults: 2000
+
+# The Focus panel itself: a browser (dsh.client) package whose Node half is a
+# no-op row so the client bundle ships with the Loader entry.
+- insert:
+    - id: focus
+      name: 'dsh-focus'

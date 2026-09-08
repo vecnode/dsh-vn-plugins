@@ -1,0 +1,11 @@
+{
+  "comment": "The DeepSeek Harness version line this plugin pack is built and tested against. Plugins are shipped as alpha until the owner promotes them to stable. The installer pins this exact dsh version when driving the CLI.",
+  "dsh": "0.1.2-rc.1",
+  "packages": {
+    "dsh-focus": {
+      "version": "0.1.0-alpha.0",
+      "rows": ["focus"],
+      "rowOverrides": ["file-reference-local"]
+    }
+  }
+}

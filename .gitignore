@@ -1,0 +1,11 @@
+# Local tooling & scratch
+node_modules/
+tools/
+.scratch/
+*.log
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
