@@ -19,6 +19,12 @@ Quickest path: double-click **`install.bat`** at the repo root.
 
 Overrides if auto-detection ever misses: `-DshHome <harness home> -ProfileName <profile>`.
 
+> Desktop detection is **non-fatal** during `-Target all` (the default from
+> `install.bat`): if no dsh-desktop harness profile exists the run warns,
+> skips the desktop target, and still succeeds. Pass `-Target desktop` when
+> you actually want the desktop app target — that mode fails loudly if nothing
+> is found, so install/run dsh-desktop at least once first.
+
 ## Manual path (no script)
 
 For one profile, run:

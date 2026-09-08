@@ -26,6 +26,11 @@ install.bat -Target cli      :: only the raw CLI profile
 install.bat -Target desktop  :: only dsh-desktop (close the app first)
 ```
 
+> With the default `-Target all`, a machine that has **no dsh-desktop** is not
+> an error: the desktop target is skipped with a warning and the run succeeds.
+> Use `-Target desktop` (which fails loudly when no desktop profile is found)
+> after installing/running dsh-desktop.
+
 What it does (idempotent — safe to re-run):
 
 1. pins the dsh version from `.dsh-version.json` and runs everything through
