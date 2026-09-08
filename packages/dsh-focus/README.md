@@ -45,14 +45,15 @@ no dependency on unpublished tooling, easy to keep working as DSH evolves.
 ## Current content (alpha iteration)
 
 - A right-hand column **visible by default**, next to (after) the chat —
-  never overlapping it. Title "Focus", `alpha` badge, collapse control.
-  Collapsing closes the column (the chat regains the full width) and leaves an
-  expand control floating on the right edge.
-- A `lorem ipsum` placeholder paragraph at the top of the panel.
-- A **Conversation folder** section below it once a conversation with a
-  working folder is selected: the folder path on top, then a full-width list
-  of its files/folders (folders first, click to open; hidden files via the
-  footer toggle). No live file watching, no diff view, no open-in-editor yet.
+  never overlapping it. Header shows the title "Focus" and the `alpha` badge
+  with a single-chevron collapse control; collapsing closes the column (the
+  chat regains the full width) and leaves the same chevron floating on the
+  right edge to expand again.
+- The panel body is the **Conversation folder**: the folder path on top, then
+  a full-width row-per-file list of its files/folders (folders first, click
+  to open; hidden files via the footer toggle). The list always follows the
+  currently selected conversation. No live file watching, no diff view, no
+  open-in-editor yet.
 
 When DeepSeek Harness ships the native right Sidebar extension seam, the panel
 is re-homed onto it.

@@ -50,9 +50,8 @@ window.__ModuleLoader__.load({
 .dsf-headSpacer{flex:1}
 .dsf-act{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);cursor:pointer;padding:0}
 .dsf-act:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12));color:var(--dsw-alias-label-primary,#1f1f1f)}
-.dsf-scroll{flex:1;min-height:0;overflow-y:auto;padding:10px 8px 12px 10px}
-.dsf-lorem{margin:2px 4px 4px;font-size:12.5px;line-height:20px;color:var(--dsw-alias-label-secondary,#555)}
-.dsf-sectionTitle{margin:12px 4px 4px;font-size:11px;line-height:16px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.dsf-scroll{flex:1;min-height:0;overflow-y:auto;padding:6px 6px 10px 6px}
+.dsf-sectionTitle{margin:8px 4px 4px;font-size:11px;line-height:16px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary,#8a8a8a)}
 .dsf-path{margin:0 4px 6px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary,#666);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;direction:ltr;font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Consolas,monospace)}
 .dsf-empty{color:var(--dsw-alias-label-tertiary,#999);font-size:12px;line-height:18px;padding:6px 4px;text-align:left}
 .dsf-error{color:var(--dsw-alias-state-error-primary,#d3382c);font-size:12px;line-height:18px;padding:6px 4px;word-break:break-word}
@@ -86,19 +85,19 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     const h = React.createElement
 
-    function IconChevronsLeft() {
+    function IconChevronLeft() {
       return h(
         'svg',
-        { viewBox: '0 0 16 16', width: 15, height: 15, fill: 'currentColor', 'aria-hidden': true },
-        h('path', { d: 'M9.5 3.5 5 8l4.5 4.5M13 3.5 8.5 8 13 12.5' }),
+        { viewBox: '0 0 16 16', width: 16, height: 16, fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
+        h('path', { d: 'M10 3.5 5.5 8l4.5 4.5' }),
       )
     }
 
-    function IconChevronsRight() {
+    function IconChevronRight() {
       return h(
         'svg',
-        { viewBox: '0 0 16 16', width: 15, height: 15, fill: 'currentColor', 'aria-hidden': true },
-        h('path', { d: 'M6.5 3.5 11 8l-4.5 4.5M3 3.5 7.5 8 3 12.5' }),
+        { viewBox: '0 0 16 16', width: 16, height: 16, fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
+        h('path', { d: 'M6 3.5 10.5 8 6 12.5' }),
       )
     }
 
@@ -477,7 +476,7 @@ window.__ModuleLoader__.load({
             onClick: face.openPanel,
             'aria-label': 'Expand Focus panel',
           },
-          IconChevronsLeft(),
+          IconChevronLeft(),
         )
       }
 
@@ -505,13 +504,12 @@ window.__ModuleLoader__.load({
             h(
               'button',
               { type: 'button', className: 'dsf-act', title: 'Collapse Focus panel', onClick: face.closePanel, 'aria-label': 'Collapse Focus panel' },
-              IconChevronsRight(),
+              IconChevronRight(),
             ),
           ),
           h(
             'div',
             { className: 'dsf-scroll' },
-            h('p', { className: 'dsf-lorem' }, 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'),
             h('div', { className: 'dsf-sectionTitle' }, 'Conversation folder'),
             hasFolder
               ? h('div', { className: 'dsf-path', title: fullPath }, fullPath)
@@ -558,17 +556,13 @@ window.__ModuleLoader__.load({
       collapseBtn.type = 'button'
       collapseBtn.className = 'dsf-act'
       collapseBtn.title = 'Collapse Focus panel'
-      collapseBtn.textContent = '>>'
+      collapseBtn.textContent = '>'
       head.appendChild(title)
       head.appendChild(badge)
       head.appendChild(spacer)
       head.appendChild(collapseBtn)
       const scroll = document.createElement('div')
       scroll.className = 'dsf-scroll'
-      const p = document.createElement('p')
-      p.className = 'dsf-lorem'
-      p.textContent =
-        'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
       const section = document.createElement('div')
       section.className = 'dsf-sectionTitle'
       section.textContent = 'Conversation folder'
@@ -577,7 +571,6 @@ window.__ModuleLoader__.load({
       const hint = document.createElement('div')
       hint.className = 'dsf-empty'
       hint.textContent = 'The conversation folder list will appear here.'
-      scroll.appendChild(p)
       scroll.appendChild(section)
       scroll.appendChild(pathEl)
       scroll.appendChild(hint)
@@ -588,7 +581,7 @@ window.__ModuleLoader__.load({
       expand.type = 'button'
       expand.className = 'dsf-expand'
       expand.title = 'Expand Focus panel'
-      expand.textContent = '<<'
+      expand.textContent = '<'
 
       host.appendChild(dock)
       host.appendChild(expand)
