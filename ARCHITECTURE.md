@@ -76,8 +76,22 @@ Rules learned from core consumers (ui-chat, ui-reference, ui-sidebar):
 - `slots` registers React components into seats; `layout` = `ctx.layout`
   (open/close panels); `sessions` = client session list; `remote` = the BFF
   namespaces (`remote.fileReferences`, ...).
+- A namespaced remote is itself a cordis service that **mounts when its
+  gateway contribution lands** - which can be after a consumer activates.
+  Mirror core `ui-reference`: declare the dotted name in `inject`
+  (`"remote.fileReferences"`) AND re-resolve it at use time, retrying while it
+  is absent (dsh-focus renders a "starting the folder service" phase instead
+  of a silently empty list).
 - `require` of core packages is possible only for modules the browser seed
   provides (React, etc.) - keep runtime imports to a minimum.
+
+**Why these client bundles are plain JavaScript, not TypeScript.** The format
+above is the only one the harness serves: a single hand-written module-table
+file per package, no build step. A TS pipeline would insert a compile between
+every edit and the running GUI (there is no HMR unless a `pnpm run dev:web`
+watcher from the harness repo runs), and would type against a client surface
+that is still evolving. Plain JS + JSDoc keeps the edit -> restart loop
+instant and the code greppable against the shipped core bundles.
 
 ## 4. How Focus gets a real right-hand column (no overlap)
 
@@ -128,13 +142,25 @@ reserves the details track identically, so the panel always appears.
   `{ path, kind: "file" | "directory" }` entries:
   - root listing: query `""`
   - subfolder: query `"sub/dir/"`
-  - hidden dotfiles: query `"<dir>/."` (merged when "Show hidden" is on)
+  - dotfiles: a second query `"./."` (root) or `"<dir>/."` whose fragment
+    starts with `.` lets the backend reveal hidden entries - but that mode is
+    fuzzy, so the client keeps only names that actually start with `.`,
+    merges them with the plain listing and dedupes by path
+- Dotfile visibility: **on by default** (footer "Hidden files" toggle turns
+  them off). Either way the host never returns `.git`, `node_modules`,
+  `dist`, `build`, `out`, `coverage`, `target`, `.next`, `.nuxt`, `.turbo`,
+  `.venv`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.gradle`.
+- The namespace is declared as `inject: [... 'remote.fileReferences']` and
+  re-resolved before every listing. If it has not mounted yet the store sits
+  in a `waiting` phase and retries, so the panel shows a status line instead
+  of a silently empty folder (the phase that bit alpha.4: it only listed
+  after a session switch and otherwise looked empty).
 - Listing cap: the stock row caps answers at 20 rows, so `cordis.patch.yml`
   restates the `file-reference-local` row with `config.maxResults: 2000`.
-- Rendering: rows sorted folders-first then by name; path on top
-  (monospace), folder rows open into the folder, `..` goes up. The file
-  search intentionally excludes `.git`, `node_modules`, `dist`, `build`,
-  etc., so folders inside those are not listed.
+- Rendering: folder path on top (monospace), breadcrumbs once you drill in,
+  rows sorted folders-first then by name; folder rows open into the folder,
+  `..` goes up, dotfile rows are dimmed; a footer shows the item count and
+  the hidden toggle; waiting/loading/error/empty states are explicit.
 
 ## 6. The installer
 

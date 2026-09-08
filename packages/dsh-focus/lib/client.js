@@ -8,8 +8,9 @@
  * handle). Focus occupies that track visually:
  *
  *   - on open  -> ctx.layout.openDetails()  (chat column shrinks, track widens)
- *   - closed   -> ctx.layout.closeDetails() (chat full width) + a floating
- *                 expand control on the right edge
+ *   - closed   -> ctx.layout.closeDetails() (chat full width) + Focus stays
+ *                 visible as a slim edge rail (like the collapsed left
+ *                 sidebar) with the expand control - never a close button
  *   - width    -> tracked live from the frame's grid-template-columns, so the
  *                 panel follows the user's drag handle exactly
  *
@@ -19,11 +20,13 @@
  * reserves the same track is mounted instead.
  *
  * Content (alpha iteration per owner):
- *   - a "lorem ipsum" placeholder,
- *   - below it a full-width list of the conversation folder's entries with
- *     the folder path on top (session + cwd via ctx.sessions; entries via
- *     ctx.remote.fileReferences - the same kind-aware, cwd-scoped remote the
- *     `@` file menu uses), styled with the native DSH tokens.
+ *   - the current conversation's folder, listed as one row per file/folder
+ *     (session + cwd via ctx.sessions; entries via the
+ *     `remote.fileReferences` namespace - the same kind-aware, cwd-scoped
+ *     remote the `@` file menu uses). Dotfiles are shown by default with a
+ *     footer "Hidden files" toggle; breadcrumbs navigate into folders; the
+ *     panel never silently blanks: 'waiting' (listing service not mounted
+ *     yet, retried), 'loading', and error states are shown explicitly.
  *
  * Module-table format of every core client package; no build step.
  */
@@ -58,6 +61,7 @@ window.__ModuleLoader__.load({
 .dsf-crumb{display:flex;align-items:center;gap:2px;padding:0 4px 4px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#888);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsf-crumbLink{color:var(--dsw-alias-label-tertiary,#888);cursor:pointer;background:none;border:0;padding:0 2px;font:inherit}
 .dsf-crumbLink:hover{color:var(--dsw-alias-label-primary,#1f1f1f)}
+.dsf-crumbCurrent{color:var(--dsw-alias-label-secondary,#666);padding:0 2px}
 .dsf-body{width:100%;display:flex;flex-direction:column}
 .dsf-row{display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;text-align:left;border:0;background:transparent;border-radius:6px;padding:3px 8px;height:28px;color:var(--dsw-alias-label-primary,#1f1f1f);cursor:pointer;font:inherit;flex:none}
 .dsf-row:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.1))}
@@ -65,9 +69,16 @@ window.__ModuleLoader__.load({
 .dsf-rowDir .dsf-rowIcon{color:#e8a33d}
 .dsf-rowName{flex:1;min-width:0;font-size:12.5px;line-height:18px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .dsf-chev{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#aaa)}
-.dsf-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 4px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#999)}
-.dsf-showHidden{display:inline-flex;align-items:center;gap:4px;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:2px 4px;border-radius:4px}
-.dsf-showHidden:hover{color:var(--dsw-alias-label-primary,#333);background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))}
+.dsf-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px 7px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#999)}
+.dsf-count{white-space:nowrap}
+.dsf-toggle{display:inline-flex;align-items:center;gap:5px;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:2px 4px;border-radius:4px;user-select:none}
+.dsf-toggle:hover{color:var(--dsw-alias-label-primary,#333)}
+.dsf-toggle input{width:12px;height:12px;margin:0;cursor:pointer;accent-color:var(--dsw-alias-state-accent,#4f8cff)}
+.dsf-rowNameDot{color:var(--dsw-alias-label-secondary,#777)}
+.dsf-status{color:var(--dsw-alias-label-tertiary,#999);font-size:12px;line-height:18px;padding:6px 4px;text-align:left;display:flex;align-items:center;gap:6px}
+.dsf-statusDot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-info-primary,rgba(79,140,255,.8))}
+.dsf-statusErrDot{background:var(--dsw-alias-state-error-primary,#d3382c)}
+.dsf-statusWarnDot{background:var(--dsw-alias-state-warning-primary,#d29922)}
 .dsf-rail{position:absolute;top:0;right:0;bottom:0;width:52px;display:flex;flex-direction:column;align-items:center;padding-top:8px;background:var(--dsw-alias-bg-base,var(--dsw-specific-sidebar-fill,#f7f7f8));border-left:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.25))}
 .dsf-railBtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary,#666);cursor:pointer;padding:0;margin-top:2px}
 .dsf-railBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12));color:var(--dsw-alias-label-primary,#1f1f1f)}
@@ -162,23 +173,30 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     // Focus store: one instance per plugin activation.
     // ---------------------------------------------------------------------
-    function createFocusStore(sessions, remote) {
+    function createFocusStore(getRefs, sessions) {
+      // The `remote.fileReferences` namespace is a cordis service that mounts
+      // when the gateway contribution lands, which can be AFTER Focus
+      // activates. getRefs() is re-read on every refresh, and the 'waiting'
+      // phase retries until the service appears - so a slow namespace shows a
+      // status line instead of a silently empty folder.
       let open = true // visible (and reserving the details track) by default
-      let hidden = false
+      let showHidden = true // dotfiles included by default (footer toggle turns them off)
       let sessionId = undefined
       let cwd = undefined
       let dir = ''
-      let phase = 'idle'
+      let phase = 'idle' // idle | waiting | loading | ready | error
       let error = null
       let entries = []
       let truncated = false
       let aborter = null
+      let retryTimer = null
+      let disposed = false
 
       const listeners = new Set()
-      let snapshot = { open, phase, sessionId, cwd, dir, entries, hidden, truncated, error }
+      let snapshot = { open, phase, sessionId, cwd, dir, entries, showHidden, truncated, error }
 
       function emit() {
-        snapshot = { open, phase, sessionId, cwd, dir, entries, hidden, truncated, error }
+        snapshot = { open, phase, sessionId, cwd, dir, entries, showHidden, truncated, error }
         for (const listener of listeners) {
           try {
             listener()
@@ -188,24 +206,102 @@ window.__ModuleLoader__.load({
         }
       }
 
-      function fileReferences() {
+      function refsNow() {
         try {
-          return remote && remote.fileReferences
+          return getRefs()
         } catch (e) {
           return undefined
         }
       }
 
+      function cancelRetry() {
+        if (retryTimer) {
+          clearTimeout(retryTimer)
+          retryTimer = null
+        }
+      }
+
+      function scheduleRetry() {
+        if (disposed || retryTimer) return
+        retryTimer = setTimeout(() => {
+          retryTimer = null
+          if (!disposed) refresh()
+        }, 700)
+      }
+
+      // One directory listing: visible entries plus (when enabled) dotfiles.
+      // The backend only reveals dotfiles when the query fragment starts with
+      // ".", and that mode is fuzzy: it also returns non-hidden names that
+      // merely contain a dot. The dotOnly flag keeps exactly the true hidden
+      // entries from that batch (then merged + deduped with the plain batch).
+      async function listFolder(refs, signal) {
+        const base = dir === '' ? '' : dir + '/'
+        const jobs = [{ query: base, dotOnly: false }]
+        if (showHidden) jobs.push({ query: dir === '' ? './.' : dir + '/.', dotOnly: true })
+
+        let lastErr = null
+        const results = await Promise.all(
+          jobs.map((job) =>
+            refs.list(sessionId, job.query, signal).then((result) => {
+              if (signal.aborted) return null
+              if (result && result.ok === true) return { entries: result.value || [], dotOnly: job.dotOnly }
+              if (result && result.ok === false) lastErr = result.error || 'list failed'
+              return null
+            }),
+          ),
+        )
+        if (signal.aborted) return { entries: [], error: null }
+
+        const seen = new Set()
+        const merged = []
+        for (const batch of results) {
+          if (!batch) continue
+          for (const candidate of batch.entries) {
+            if (!candidate || !candidate.path) continue
+            const name = candidate.path.split('/').pop()
+            if (batch.dotOnly && !name.startsWith('.')) continue
+            const path = normRel(candidate.path)
+            if (seen.has(path)) continue
+            seen.add(path)
+            merged.push({
+              name,
+              path,
+              kind: candidate.kind === 'directory' ? 'directory' : 'file',
+            })
+          }
+        }
+        merged.sort((a, b) => {
+          if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        })
+        return { entries: merged, error: lastErr }
+      }
+
       async function refresh() {
-        const refs = fileReferences()
-        if (!refs || !sessionId || !cwd) {
-          phase = 'ready'
+        if (disposed) return
+        const refs = refsNow()
+        if (!sessionId || !cwd) {
+          // No conversation yet: stay quiet, do not retry for the service.
+          phase = 'idle'
           entries = []
           truncated = false
           error = null
+          cancelRetry()
           emit()
           return
         }
+        if (!refs) {
+          // Namespace not mounted yet - wait for it instead of pretending the
+          // folder is empty.
+          phase = 'waiting'
+          entries = []
+          truncated = false
+          error = null
+          scheduleRetry()
+          emit()
+          return
+        }
+        cancelRetry()
         if (aborter) aborter.abort()
         const controller = new AbortController()
         aborter = controller
@@ -215,43 +311,16 @@ window.__ModuleLoader__.load({
         emit()
 
         const signal = controller.signal
-        const queries = [dir === '' ? '' : dir + '/']
-        if (hidden) queries.push(dir === '' ? './.' : dir + '/.')
-
-        let merged = []
-        let lastErr = null
         try {
-          const results = await Promise.all(
-            queries.map((query) =>
-              refs.list(sessionId, query, signal).then((result) => {
-                if (signal.aborted) return null
-                if (result && result.ok === true) return result.value || []
-                if (result && result.ok === false) lastErr = result.error || 'list failed'
-                return null
-              }),
-            ),
-          )
+          const listed = await listFolder(refs, signal)
           if (signal.aborted) return
-          merged = []
-          for (const batch of results) {
-            if (!batch) continue
-            for (const candidate of batch) {
-              if (!candidate || !candidate.path) continue
-              merged.push({
-                name: candidate.path.split('/').pop(),
-                path: normRel(candidate.path),
-                kind: candidate.kind === 'directory' ? 'directory' : 'file',
-              })
-            }
-          }
-          merged.sort((a, b) => {
-            if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
-            return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-          })
-          entries = merged
-          truncated = merged.length >= 1900
-          phase = lastErr && merged.length === 0 ? 'error' : 'ready'
-          error = phase === 'error' ? String((lastErr && (lastErr.message || lastErr.code)) || lastErr) : null
+          entries = listed.entries
+          truncated = listed.entries.length >= 1900
+          phase = listed.error && listed.entries.length === 0 ? 'error' : 'ready'
+          error =
+            phase === 'error'
+              ? String((listed.error && (listed.error.message || listed.error.code)) || listed.error)
+              : null
         } catch (err) {
           if (signal.aborted) return
           phase = 'error'
@@ -285,6 +354,7 @@ window.__ModuleLoader__.load({
             phase = 'idle'
             entries = []
             error = null
+            cancelRetry()
             emit()
           }
         }
@@ -320,6 +390,7 @@ window.__ModuleLoader__.load({
         closePanel() {
           if (open) {
             open = false
+            cancelRetry()
             emit()
           }
         },
@@ -328,12 +399,14 @@ window.__ModuleLoader__.load({
           // without re-fighting the layout.
           if (open !== value) {
             open = value
+            if (!value) cancelRetry()
             emit()
           }
         },
         togglePanel() {
           open = !open
           if (open) refresh()
+          else cancelRetry()
           emit()
         },
         refresh,
@@ -345,14 +418,16 @@ window.__ModuleLoader__.load({
           dir = parentOf(dir)
           refresh()
         },
-        setHidden(value) {
+        setShowHidden(value) {
           const next = !!value
-          if (next !== hidden) {
-            hidden = next
+          if (next !== showHidden) {
+            showHidden = next
             refresh()
           }
         },
         dispose() {
+          disposed = true
+          cancelRetry()
           if (offList) {
             try {
               offList()
@@ -373,15 +448,6 @@ window.__ModuleLoader__.load({
     // Folder list (full width)
     // ---------------------------------------------------------------------
     function FolderList({ face, state }) {
-      const crumbs = []
-      if (state.dir) {
-        let acc = ''
-        for (const part of state.dir.split('/')) {
-          acc = acc ? acc + '/' + part : part
-          crumbs.push({ name: part, dir: acc })
-        }
-      }
-
       const rows = []
       if (state.dir) {
         rows.push(
@@ -395,6 +461,7 @@ window.__ModuleLoader__.load({
       }
       for (const entry of state.entries) {
         const isDir = entry.kind === 'directory'
+        const dot = entry.name.charAt(0) === '.'
         rows.push(
           h(
             'button',
@@ -403,17 +470,18 @@ window.__ModuleLoader__.load({
               type: 'button',
               className: 'dsf-row' + (isDir ? ' dsf-rowDir' : ''),
               title: isDir ? entry.path + '/' : entry.path,
-              onClick: () => {
-                if (isDir) face.openDir(entry.path)
-              },
+              onClick: isDir
+                ? () => {
+                    face.openDir(entry.path)
+                  }
+                : undefined,
             },
             h('span', { className: 'dsf-rowIcon' }, isDir ? IconFolder() : IconFile()),
-            h('span', { className: 'dsf-rowName' }, entry.name),
+            h('span', { className: 'dsf-rowName' + (dot ? ' dsf-rowNameDot' : '') }, entry.name),
             isDir ? h('span', { className: 'dsf-chev' }, '>') : null,
           ),
         )
       }
-
       return h('div', { className: 'dsf-body' }, rows)
     }
 
@@ -492,8 +560,10 @@ window.__ModuleLoader__.load({
               type: 'button',
               className: 'dsf-railBtn',
               title: 'Expand Focus panel',
-              onClick: face.openPanel,
               'aria-label': 'Expand Focus panel',
+              'aria-expanded': 'false',
+              'aria-controls': 'dsh-focus-dock',
+              onClick: face.openPanel,
             },
             IconPanel(),
           ),
@@ -505,16 +575,102 @@ window.__ModuleLoader__.load({
       const hasFolder = !!(state.sessionId && state.cwd)
       const fullPath = hasFolder ? joinDisplay(state.cwd, state.dir) : ''
 
+      // Breadcrumbs for drilled folders: ancestors are clickable, the current
+      // segment is plain text.
+      const crumbEls = []
+      if (state.dir) {
+        const parts = state.dir.split('/')
+        crumbEls.push(
+          h(
+            'button',
+            { key: 'root', type: 'button', className: 'dsf-crumbLink', title: 'Workspace root', onClick: () => face.openDir('') },
+            'workspace',
+          ),
+        )
+        let acc = ''
+        for (let i = 0; i < parts.length; i += 1) {
+          acc = acc ? acc + '/' + parts[i] : parts[i]
+          crumbEls.push(h('span', { key: acc + '/sep' }, ' / '))
+          if (i === parts.length - 1) {
+            crumbEls.push(h('span', { key: acc, className: 'dsf-crumbCurrent', 'aria-current': 'location' }, parts[i]))
+          } else {
+            crumbEls.push(
+              h('button', { key: acc, type: 'button', className: 'dsf-crumbLink', onClick: () => face.openDir(acc) }, parts[i]),
+            )
+          }
+        }
+      }
+
+      // Body per store phase: waiting (listing service not mounted yet),
+      // loading, error, empty, or the real folder rows.
+      let body
+      if (!hasFolder) {
+        body = h('div', { className: 'dsf-empty' }, 'Open a conversation to see its folder here.')
+      } else if (state.phase === 'waiting') {
+        body = h(
+          'div',
+          { className: 'dsf-status' },
+          h('span', { className: 'dsf-statusDot dsf-statusWarnDot' }),
+          h('span', null, 'Starting the folder service\u2026'),
+        )
+      } else if (state.phase === 'loading') {
+        body = h(
+          'div',
+          { className: 'dsf-status' },
+          h('span', { className: 'dsf-statusDot' }),
+          h('span', null, 'Loading folder\u2026'),
+        )
+      } else if (state.phase === 'error') {
+        body = h('div', { className: 'dsf-error' }, state.error || 'Could not list this folder.')
+      } else if (state.entries.length === 0) {
+        body = h(
+          'div',
+          { className: 'dsf-empty' },
+          state.showHidden
+            ? 'No files to show here \u2014 excluded folders (node_modules, dist, \u2026) are skipped.'
+            : 'No files to show here (hidden files are off).',
+        )
+      } else {
+        body = h(FolderList, { face, state })
+      }
+
+      const itemCount = state.entries.length
+      const footer = hasFolder
+        ? h(
+            'div',
+            { className: 'dsf-foot' },
+            h(
+              'span',
+              { className: 'dsf-count' },
+              state.phase === 'ready' || state.phase === 'error'
+                ? itemCount + (state.truncated ? '+' : '') + ' item' + (itemCount === 1 ? '' : 's')
+                : '\u00a0',
+            ),
+            h(
+              'label',
+              { className: 'dsf-toggle', title: 'Show or hide dotfiles such as .gitignore and .dsh-version.json' },
+              h('input', {
+                type: 'checkbox',
+                checked: state.showHidden,
+                onChange: (event) => face.setShowHidden(event.target.checked),
+              }),
+              h('span', null, 'Hidden files'),
+            ),
+          )
+        : null
+
       return h(
         'div',
         { className: 'dsf-root', ref: rootRef },
         h(
           'div',
           {
+            id: 'dsh-focus-dock',
             className: 'dsf-dock',
             style: width > 0 ? { width: width + 'px' } : { width: '0px', overflow: 'hidden' },
             role: 'complementary',
             'aria-label': 'Focus panel',
+            'aria-expanded': 'true',
           },
           h(
             'div',
@@ -524,7 +680,15 @@ window.__ModuleLoader__.load({
             h('span', { className: 'dsf-headSpacer' }),
             h(
               'button',
-              { type: 'button', className: 'dsf-act', title: 'Collapse Focus panel', onClick: face.closePanel, 'aria-label': 'Collapse Focus panel' },
+              {
+                type: 'button',
+                className: 'dsf-act',
+                title: 'Collapse Focus panel to the edge bar',
+                'aria-label': 'Collapse Focus panel',
+                'aria-expanded': 'true',
+                'aria-controls': 'dsh-focus-dock',
+                onClick: face.closePanel,
+              },
               IconPanel(),
             ),
           ),
@@ -532,11 +696,11 @@ window.__ModuleLoader__.load({
             'div',
             { className: 'dsf-scroll' },
             h('div', { className: 'dsf-sectionTitle' }, 'Conversation folder'),
-            hasFolder
-              ? h('div', { className: 'dsf-path', title: fullPath }, fullPath)
-              : h('div', { className: 'dsf-empty' }, 'Open a conversation to see its folder here.'),
-            hasFolder ? h(FolderList, { face, state }) : null,
+            hasFolder ? h('div', { className: 'dsf-path', title: fullPath }, fullPath) : null,
+            crumbEls.length > 0 ? h('div', { className: 'dsf-crumb' }, crumbEls) : null,
+            body,
           ),
+          footer,
         ),
       )
     }
@@ -561,6 +725,7 @@ window.__ModuleLoader__.load({
 
       const dock = document.createElement('div')
       dock.className = 'dsf-dock'
+      dock.id = 'dsh-focus-dock'
       dock.style.pointerEvents = 'auto'
 
       const head = document.createElement('div')
@@ -576,12 +741,15 @@ window.__ModuleLoader__.load({
       const collapseBtn = document.createElement('button')
       collapseBtn.type = 'button'
       collapseBtn.className = 'dsf-act'
-      collapseBtn.title = 'Collapse Focus panel'
-      collapseBtn.textContent = '>'
+      collapseBtn.title = 'Collapse Focus panel to the edge bar'
+      collapseBtn.setAttribute('aria-label', 'Collapse Focus panel')
+      collapseBtn.setAttribute('aria-expanded', 'true')
+      collapseBtn.textContent = '\u00bb'
       head.appendChild(title)
       head.appendChild(badge)
       head.appendChild(spacer)
       head.appendChild(collapseBtn)
+
       const scroll = document.createElement('div')
       scroll.className = 'dsf-scroll'
       const section = document.createElement('div')
@@ -589,23 +757,52 @@ window.__ModuleLoader__.load({
       section.textContent = 'Conversation folder'
       const pathEl = document.createElement('div')
       pathEl.className = 'dsf-path'
-      const hint = document.createElement('div')
-      hint.className = 'dsf-empty'
-      hint.textContent = 'The conversation folder list will appear here.'
+      const bodyEl = document.createElement('div')
+      bodyEl.className = 'dsf-body'
       scroll.appendChild(section)
       scroll.appendChild(pathEl)
-      scroll.appendChild(hint)
+      scroll.appendChild(bodyEl)
+
+      const foot = document.createElement('div')
+      foot.className = 'dsf-foot'
+      const countEl = document.createElement('span')
+      countEl.className = 'dsf-count'
+      const toggle = document.createElement('label')
+      toggle.className = 'dsf-toggle'
+      toggle.title = 'Show or hide dotfiles such as .gitignore and .dsh-version.json'
+      const checkbox = document.createElement('input')
+      checkbox.type = 'checkbox'
+      const toggleText = document.createElement('span')
+      toggleText.textContent = 'Hidden files'
+      toggle.appendChild(checkbox)
+      toggle.appendChild(toggleText)
+      foot.appendChild(countEl)
+      foot.appendChild(toggle)
+
       dock.appendChild(head)
       dock.appendChild(scroll)
+      dock.appendChild(foot)
 
-      const expand = document.createElement('button')
-      expand.type = 'button'
-      expand.className = 'dsf-expand'
-      expand.title = 'Expand Focus panel'
-      expand.textContent = '<'
+      // Slim rail used while collapsed (mirrors the collapsed left sidebar).
+      const rail = document.createElement('div')
+      rail.className = 'dsf-rail'
+      rail.setAttribute('role', 'complementary')
+      rail.setAttribute('aria-label', 'Focus panel (collapsed)')
+      const expandBtn = document.createElement('button')
+      expandBtn.type = 'button'
+      expandBtn.className = 'dsf-railBtn'
+      expandBtn.title = 'Expand Focus panel'
+      expandBtn.setAttribute('aria-label', 'Expand Focus panel')
+      expandBtn.setAttribute('aria-expanded', 'false')
+      expandBtn.textContent = '\u00ab'
+      const railLabel = document.createElement('span')
+      railLabel.className = 'dsf-railLabel'
+      railLabel.textContent = 'Focus'
+      rail.appendChild(expandBtn)
+      rail.appendChild(railLabel)
 
       host.appendChild(dock)
-      host.appendChild(expand)
+      host.appendChild(rail)
       ;(layerEl || document.body).appendChild(host)
 
       let hadPositive = false
@@ -626,18 +823,113 @@ window.__ModuleLoader__.load({
         }
       }
 
+      function makeRow(name, opts) {
+        const row = document.createElement('button')
+        row.type = 'button'
+        row.className = 'dsf-row' + (opts.dir ? ' dsf-rowDir' : '')
+        if (opts.title) row.title = opts.title
+        const icon = document.createElement('span')
+        icon.className = 'dsf-rowIcon'
+        icon.textContent = opts.dir ? '\u25b8' : '\u00b7'
+        const label = document.createElement('span')
+        label.className = 'dsf-rowName' + (opts.dot ? ' dsf-rowNameDot' : '')
+        label.textContent = name
+        row.appendChild(icon)
+        row.appendChild(label)
+        if (opts.dir) {
+          const chev = document.createElement('span')
+          chev.className = 'dsf-chev'
+          chev.textContent = '>'
+          row.appendChild(chev)
+        }
+        if (opts.onClick) row.addEventListener('click', opts.onClick)
+        return row
+      }
+
+      const renderBody = (st) => {
+        bodyEl.textContent = ''
+        if (!st.sessionId || !st.cwd) {
+          const hint = document.createElement('div')
+          hint.className = 'dsf-empty'
+          hint.textContent = 'Open a conversation to see its folder here.'
+          bodyEl.appendChild(hint)
+          return
+        }
+        if (st.phase === 'waiting') {
+          const status = document.createElement('div')
+          status.className = 'dsf-status'
+          status.textContent = 'Starting the folder service\u2026'
+          bodyEl.appendChild(status)
+          return
+        }
+        if (st.phase === 'loading') {
+          const status = document.createElement('div')
+          status.className = 'dsf-status'
+          status.textContent = 'Loading folder\u2026'
+          bodyEl.appendChild(status)
+          return
+        }
+        if (st.phase === 'error') {
+          const err = document.createElement('div')
+          err.className = 'dsf-error'
+          err.textContent = st.error || 'Could not list this folder.'
+          bodyEl.appendChild(err)
+          return
+        }
+        if (st.entries.length === 0) {
+          const hint = document.createElement('div')
+          hint.className = 'dsf-empty'
+          hint.textContent = st.showHidden
+            ? 'No files to show here \u2014 excluded folders (node_modules, dist, \u2026) are skipped.'
+            : 'No files to show here (hidden files are off).'
+          bodyEl.appendChild(hint)
+          return
+        }
+        if (st.dir) {
+          bodyEl.appendChild(makeRow('..', { title: 'Go up one folder', onClick: () => face.goUp() }))
+        }
+        for (const entry of st.entries) {
+          const isDir = entry.kind === 'directory'
+          bodyEl.appendChild(
+            makeRow(entry.name, {
+              dir: isDir,
+              dot: entry.name.charAt(0) === '.',
+              title: isDir ? entry.path + '/' : entry.path,
+              onClick: isDir
+                ? () => {
+                    face.openDir(entry.path)
+                  }
+                : undefined,
+            }),
+          )
+        }
+      }
+
       const applyState = (st) => {
-        dock.style.display = st.open ? 'flex' : 'none'
-        expand.style.display = st.open ? 'none' : 'flex'
-        if (st.open && st.cwd) {
+        const open = !!st.open
+        dock.style.display = open ? 'flex' : 'none'
+        rail.style.display = open ? 'none' : 'flex'
+        collapseBtn.setAttribute('aria-expanded', open ? 'true' : 'false')
+        expandBtn.setAttribute('aria-expanded', open ? 'true' : 'false')
+        if (open && st.cwd) {
           pathEl.textContent = st.dir ? st.cwd.replace(/[\\/]+$/, '') + '/' + st.dir : st.cwd
           pathEl.title = pathEl.textContent
+          pathEl.style.display = ''
         } else {
           pathEl.textContent = ''
+          pathEl.style.display = 'none'
         }
+        if (open) {
+          renderBody(st)
+          countEl.textContent =
+            st.phase === 'ready' || st.phase === 'error'
+              ? st.entries.length + (st.truncated ? '+' : '') + ' item' + (st.entries.length === 1 ? '' : 's')
+              : '\u00a0'
+        }
+        checkbox.checked = !!st.showHidden
         if (layout) {
           try {
-            if (st.open) layout.openDetails()
+            if (open) layout.openDetails()
             else layout.closeDetails()
           } catch (e) {}
         }
@@ -654,8 +946,9 @@ window.__ModuleLoader__.load({
       const mo = frame ? new MutationObserver(measure) : null
       if (mo) mo.observe(frame, { attributes: true, attributeFilter: ['style'] })
 
-      expand.addEventListener('click', () => face.openPanel())
+      expandBtn.addEventListener('click', () => face.openPanel())
       collapseBtn.addEventListener('click', () => face.closePanel())
+      checkbox.addEventListener('change', () => face.setShowHidden(checkbox.checked))
 
       return () => {
         try {
@@ -671,7 +964,7 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     // Plugin entry
     // ---------------------------------------------------------------------
-    const inject = ['slots', 'layout', 'sessions', 'remote']
+    const inject = ['slots', 'layout', 'sessions', 'remote', 'remote.fileReferences']
 
     function apply(ctx) {
       const slots = ctx.get ? ctx.get('slots') || ctx.slots : ctx.slots
@@ -679,10 +972,28 @@ window.__ModuleLoader__.load({
       const sessions = ctx.get ? ctx.get('sessions') : undefined
       const remote = ctx.get ? ctx.get('remote') : undefined
 
+      // Re-resolve the folder-listing namespace on every call: it is a cordis
+      // service that mounts when the gateway contribution lands, possibly
+      // AFTER this plugin activates. When it is not there yet the store sits
+      // in the 'waiting' phase and retries instead of showing an empty folder.
+      const getRefs = () => {
+        if (ctx && typeof ctx.get === 'function') {
+          try {
+            const named = ctx.get('remote.fileReferences')
+            if (named && typeof named.list === 'function') return named
+          } catch (e) {}
+        }
+        try {
+          const onRemote = remote && remote.fileReferences
+          if (onRemote && typeof onRemote.list === 'function') return onRemote
+        } catch (e) {}
+        return undefined
+      }
+
       const disposers = []
       try {
-        if (slots && sessions && remote) {
-          const face = createFocusStore(sessions, remote)
+        if (slots && sessions) {
+          const face = createFocusStore(getRefs, sessions)
           let registered = false
           try {
             // shell.overlay is declared by the core layout entry; wait for its

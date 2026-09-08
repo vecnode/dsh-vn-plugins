@@ -14,7 +14,7 @@ uninstall are clean on both targets and nothing patches core Harness files.
 
 | Package | What it does | Status |
 |---|---|---|
-| [`packages/dsh-focus`](packages/dsh-focus) | **Focus** — a real right-hand column next to the chat (never overlapping it): lorem-ipsum placeholder + full-width list of the current conversation's folder with the folder path on top. | alpha `0.1.0-alpha.2` |
+| [`packages/dsh-focus`](packages/dsh-focus) | **Focus** — a real right-hand column next to the chat (never overlapping it): lists every file/folder of the current conversation's folder as rows (dotfiles on by default with a footer toggle, breadcrumbs, always-visible collapse rail — no close button). | alpha `0.1.0-alpha.5` |
 
 ## Install (Windows)
 
@@ -54,16 +54,35 @@ dsh-focus ships is reverted automatically.
   `.dsh-version.json` (`0.1.2-rc.1` — the current `latest`/`next` on npm and
   the line dsh-desktop stable is built on). When DSH evolves, bump the pin and
   adapt the plugins (see `docs/COMPATIBILITY.md`).
+- **Language**: the UI halves are intentionally **plain JavaScript**, no build
+  step — core client packages ship hand-written module-table bundles and the
+  edit→restart loop stays instant. See `packages/dsh-focus/README.md`.
+- **Iterating on a change**: the raw-CLI profile installs `dsh-focus` as a
+  live link to this repo, so after editing `lib/client.js` you only need to
+  **restart** `npx @deepseek-ai/dsh web` and hard-refresh the browser tab
+  (Ctrl+F5) — `install.bat` skips bundles that are already listed unless you
+  pass `-Force`, and is required only for the **desktop** target (close the
+  app first, then `install.bat -Target desktop -Force`) or after adding a new
+  package.
 - The desktop app's Safe Mode intentionally blocks third-party plugins; the
   normal profile loads them.
 - See [`docs/INSTALL.md`](docs/INSTALL.md) for the manual path and
   troubleshooting.
+
+## Security & license
+
+- MIT — see [LICENSE](LICENSE). Plugins are authored by **vecnode**.
+- Security policy (supported line, private reporting, hardening expectations):
+  [SECURITY.md](SECURITY.md). This pack never touches API keys, never patches
+  DeepSeek core packages, and installs only the pinned harness line.
 
 ## Repository layout
 
 ```
 AGENTS.md              quick-start brief for coding agents working in this repo
 ARCHITECTURE.md        deep dive: plugin model, Focus geometry/data flow, installer
+LICENSE                MIT license (vecnode)
+SECURITY.md            security policy: supported line, private reporting, hardening
 packages/<bundle>/     one standalone dsh bundle (package.json + cordis.patch.yml + lib/)
   lib/index.js         Node half (may be a no-op row so the client bundle ships)
   lib/client.js        Browser half (module-table bundle; no build step)
