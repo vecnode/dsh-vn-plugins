@@ -62,6 +62,8 @@ dsh-focus ships is reverted automatically.
 ## Repository layout
 
 ```
+AGENTS.md              quick-start brief for coding agents working in this repo
+ARCHITECTURE.md        deep dive: plugin model, Focus geometry/data flow, installer
 packages/<bundle>/     one standalone dsh bundle (package.json + cordis.patch.yml + lib/)
   lib/index.js         Node half (may be a no-op row so the client bundle ships)
   lib/client.js        Browser half (module-table bundle; no build step)

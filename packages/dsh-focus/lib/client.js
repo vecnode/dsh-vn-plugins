@@ -68,6 +68,10 @@ window.__ModuleLoader__.load({
 .dsf-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 4px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#999)}
 .dsf-showHidden{display:inline-flex;align-items:center;gap:4px;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:2px 4px;border-radius:4px}
 .dsf-showHidden:hover{color:var(--dsw-alias-label-primary,#333);background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))}
+.dsf-rail{position:absolute;top:0;right:0;bottom:0;width:52px;display:flex;flex-direction:column;align-items:center;padding-top:8px;background:var(--dsw-alias-bg-base,var(--dsw-specific-sidebar-fill,#f7f7f8));border-left:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.25))}
+.dsf-railBtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary,#666);cursor:pointer;padding:0;margin-top:2px}
+.dsf-railBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12));color:var(--dsw-alias-label-primary,#1f1f1f)}
+.dsf-railLabel{writing-mode:vertical-rl;font-size:10px;letter-spacing:.12em;color:var(--dsw-alias-label-tertiary,#999);margin-top:8px;text-transform:uppercase}
 .dsf-expand{position:absolute;top:50%;right:8px;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:30px;height:56px;border:0;border-radius:10px;cursor:pointer;color:var(--dsw-alias-label-secondary,#666);background:var(--dsw-alias-button-floating-fill,rgba(127,127,127,.1));box-shadow:0 0 0 .5px var(--dsw-alias-border-l3,rgba(127,127,127,.22));padding:0;z-index:1}
 .dsf-expand:hover{color:var(--dsw-alias-label-primary,#1f1f1f);background:var(--dsw-alias-button-floating-hover,rgba(127,127,127,.18))}
 `
@@ -98,6 +102,17 @@ window.__ModuleLoader__.load({
         'svg',
         { viewBox: '0 0 16 16', width: 16, height: 16, fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
         h('path', { d: 'M6 3.5 10.5 8 6 12.5' }),
+      )
+    }
+
+    // Panel-toggle glyph (mirrors the left sidebar's panel icon): a pane with
+    // a vertical divider - clearly expand/collapse, never a close mark.
+    function IconPanel() {
+      return h(
+        'svg',
+        { viewBox: '0 0 16 16', width: 16, height: 16, fill: 'none', stroke: 'currentColor', strokeWidth: 1.2, strokeLinejoin: 'round', 'aria-hidden': true },
+        h('rect', { x: 2, y: 2.75, width: 12, height: 10.5, rx: 1.5 }),
+        h('path', { d: 'M10.6 5v6' }),
       )
     }
 
@@ -466,17 +481,23 @@ window.__ModuleLoader__.load({
       if (!state) return null
 
       if (!state.open) {
-        // Chat is full width again; keep a floating expand control.
+        // Collapsed: the panel is always visible as a slim rail on the right
+        // edge (like the collapsed left sidebar), with the expand control.
         return h(
-          'button',
-          {
-            type: 'button',
-            className: 'dsf-expand',
-            title: 'Expand Focus panel',
-            onClick: face.openPanel,
-            'aria-label': 'Expand Focus panel',
-          },
-          IconChevronLeft(),
+          'div',
+          { className: 'dsf-rail', role: 'complementary', 'aria-label': 'Focus panel (collapsed)' },
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'dsf-railBtn',
+              title: 'Expand Focus panel',
+              onClick: face.openPanel,
+              'aria-label': 'Expand Focus panel',
+            },
+            IconPanel(),
+          ),
+          h('span', { className: 'dsf-railLabel' }, 'Focus'),
         )
       }
 
@@ -504,7 +525,7 @@ window.__ModuleLoader__.load({
             h(
               'button',
               { type: 'button', className: 'dsf-act', title: 'Collapse Focus panel', onClick: face.closePanel, 'aria-label': 'Collapse Focus panel' },
-              IconChevronRight(),
+              IconPanel(),
             ),
           ),
           h(

@@ -45,10 +45,11 @@ no dependency on unpublished tooling, easy to keep working as DSH evolves.
 ## Current content (alpha iteration)
 
 - A right-hand column **visible by default**, next to (after) the chat —
-  never overlapping it. Header shows the title "Focus" and the `alpha` badge
-  with a single-chevron collapse control; collapsing closes the column (the
-  chat regains the full width) and leaves the same chevron floating on the
-  right edge to expand again.
+  never overlapping it. Header shows the title "Focus", the `alpha` badge,
+  and a panel-outline **collapse** control. Collapsing closes the column (the
+  chat regains the full width) and Focus stays visible as a slim rail on the
+  right edge (like the collapsed left sidebar) with the same panel-outline
+  **expand** control - always visible, never a close button.
 - The panel body is the **Conversation folder**: the folder path on top, then
   a full-width row-per-file list of its files/folders (folders first, click
   to open; hidden files via the footer toggle). The list always follows the
