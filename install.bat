@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  dsh-plugins installer (double-click friendly)
+rem  dsh-vn-plugins installer (double-click friendly)
 rem  Installs the plugin pack into the CLI profile (npx dsh web)
 rem  and/or dsh-desktop. Targets: all (default) | cli | desktop
 rem  e.g.  install.bat -Target cli
@@ -11,9 +11,9 @@ set "EXITCODE=%ERRORLEVEL%"
 echo.
 echo ============================================================
 if "%EXITCODE%"=="0" (
-  echo  dsh-plugins installed successfully.
+  echo  dsh-vn-plugins installed successfully.
 ) else (
-  echo  dsh-plugins install FAILED - see the messages above.
+  echo  dsh-vn-plugins install FAILED - see the messages above.
 )
 echo ============================================================
 echo.

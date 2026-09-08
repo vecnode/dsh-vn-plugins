@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs the dsh-plugins bundle set into DeepSeek Harness profiles on this
+    Installs the dsh-vn-plugins bundle set into DeepSeek Harness profiles on this
     Windows machine.
 
 .DESCRIPTION
@@ -58,7 +58,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Write-Step($msg) { Write-Host "[dsh-plugins] $msg" -ForegroundColor Cyan }
+function Write-Step($msg) { Write-Host "[dsh-vn-plugins] $msg" -ForegroundColor Cyan }
 
 function Get-DshPin {
     $manifest = Join-Path $repoRoot '.dsh-version.json'

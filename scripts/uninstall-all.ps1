@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Removes the dsh-plugins bundle set from DeepSeek Harness profiles
+    Removes the dsh-vn-plugins bundle set from DeepSeek Harness profiles
     (cli and/or dsh-desktop). Removing a bundle also removes its patch layer,
     so the file-reference override shipped by dsh-focus is reverted too.
 
@@ -28,7 +28,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Write-Step($msg) { Write-Host "[dsh-plugins] $msg" -ForegroundColor Yellow }
+function Write-Step($msg) { Write-Host "[dsh-vn-plugins] $msg" -ForegroundColor Yellow }
 
 function Get-DshPin {
     $manifest = Join-Path $repoRoot '.dsh-version.json'

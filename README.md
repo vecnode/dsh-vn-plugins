@@ -1,4 +1,4 @@
-# dsh-plugins
+# dsh-vn-plugins
 
 Personal plugin pack for **DeepSeek Harness** (Windows), installable into both
 places you run the harness:

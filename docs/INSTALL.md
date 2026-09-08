@@ -1,4 +1,4 @@
-# Installing dsh-plugins (Windows)
+# Installing dsh-vn-plugins (Windows)
 
 Quickest path: double-click **`install.bat`** at the repo root.
 
@@ -31,7 +31,7 @@ For one profile, run:
 
 ```bat
 set DSH_HOME=C:\Users\you\.dsh
-npx --yes @deepseek-ai/dsh@0.1.2-rc.1 plugin --profile web add C:\path\to\dsh-plugins\packages\dsh-focus
+npx --yes @deepseek-ai/dsh@0.1.2-rc.1 plugin --profile web add C:\path\to\dsh-vn-plugins\packages\dsh-focus
 ```
 
 (Requires `pnpm` on PATH.) Remove with the same command but `remove dsh-focus`.
