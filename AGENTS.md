@@ -34,10 +34,14 @@ Everything is a standard dsh **bundle**: an npm package with
 2. Plugins stay **alpha** (`-alpha.N`) until the owner says "make it stable".
 3. Never touch DeepSeek core packages, the harness profile internals beyond
    what `dsh plugin` does, or API keys.
-4. The browser bundle is read at harness boot - after editing
-   `packages/dsh-focus/lib/client.js`, re-install with `-Force` and RESTART
-   the app (`npx @deepseek-ai/dsh web`, or relaunch DSH Desktop). There is no
-   HMR unless a `pnpm run dev:web` watcher from the harness repo is running.
+4. The browser bundle is read at harness boot. Both base profiles install
+   `dsh-focus` as a live link into this repo, so after editing
+   `packages/dsh-focus/lib/client.js` the CLI only needs a RESTART of
+   `npx @deepseek-ai/dsh web` plus a hard browser refresh (Ctrl+F5) - no
+   reinstall. Reinstall (`install.bat`, which re-adds on version change, or
+   `-Force`) only refreshes the desktop generation, and the desktop snapshot
+   refreshes when dsh-desktop is relaunched. There is no HMR unless a
+   `pnpm run dev:web` watcher from the harness repo is running.
 5. Client bundles are module-table files:
    `window.__ModuleLoader__.load({ id, factory })`. Browser-only: no Node
    imports; you may `require("react")`; reach core services through
@@ -57,6 +61,7 @@ Everything is a standard dsh **bundle**: an npm package with
 install.bat                   :: both targets (desktop skipped with a warning when absent)
 install.bat -Target cli       :: raw CLI profile only
 install.bat -Target desktop   :: DSH Desktop only (close the app first)
+install.bat -Force            :: re-add bundles even when versions match
 uninstall.bat
 ```
 

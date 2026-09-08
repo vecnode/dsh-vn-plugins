@@ -95,6 +95,11 @@ window.__ModuleLoader__.load({
       document.head.appendChild(tag)
     }
 
+    // Version marker shown in the panel header so a freshly loaded bundle is
+    // easy to verify after a restart. Keep in sync with package.json.
+    const PLUGIN_VERSION = '0.1.0-alpha.5'
+    const PLUGIN_BADGE = PLUGIN_VERSION.indexOf('-alpha.') >= 0 ? 'alpha.' + PLUGIN_VERSION.split('-alpha.')[1] : PLUGIN_VERSION
+
     // ---------------------------------------------------------------------
     // Icons / helpers
     // ---------------------------------------------------------------------
@@ -676,7 +681,7 @@ window.__ModuleLoader__.load({
             'div',
             { className: 'dsf-head' },
             h('span', { className: 'dsf-title' }, 'Focus'),
-            h('span', { className: 'dsf-badge' }, 'alpha'),
+            h('span', { className: 'dsf-badge', title: PLUGIN_VERSION }, PLUGIN_BADGE),
             h('span', { className: 'dsf-headSpacer' }),
             h(
               'button',
@@ -735,7 +740,8 @@ window.__ModuleLoader__.load({
       title.textContent = 'Focus'
       const badge = document.createElement('span')
       badge.className = 'dsf-badge'
-      badge.textContent = 'alpha'
+      badge.title = PLUGIN_VERSION
+      badge.textContent = PLUGIN_BADGE
       const spacer = document.createElement('span')
       spacer.className = 'dsf-headSpacer'
       const collapseBtn = document.createElement('button')

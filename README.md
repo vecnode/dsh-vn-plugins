@@ -57,13 +57,19 @@ dsh-focus ships is reverted automatically.
 - **Language**: the UI halves are intentionally **plain JavaScript**, no build
   step — core client packages ship hand-written module-table bundles and the
   edit→restart loop stays instant. See `packages/dsh-focus/README.md`.
-- **Iterating on a change**: the raw-CLI profile installs `dsh-focus` as a
-  live link to this repo, so after editing `lib/client.js` you only need to
-  **restart** `npx @deepseek-ai/dsh web` and hard-refresh the browser tab
-  (Ctrl+F5) — `install.bat` skips bundles that are already listed unless you
-  pass `-Force`, and is required only for the **desktop** target (close the
-  app first, then `install.bat -Target desktop -Force`) or after adding a new
-  package.
+- **Iterating on a change**: double-clicking `install.bat` (or `install.bat
+  -Target cli|desktop`) now **re-syncs every bundle whose version in this repo
+  changed** — bump `package.json` + `.dsh-version.json`, then a plain
+  double-click re-adds it; `install.bat -Force` re-adds regardless. Two extra
+  rules for the loop to *look* applied:
+  - the raw-CLI profile installs `dsh-focus` as a **live link** into this repo,
+    so code edits are already "installed" there — you only need to **restart**
+    `npx @deepseek-ai/dsh web` and **hard-refresh** the browser (Ctrl+F5). The
+    client bundle is read once at app boot; the panel header now shows the
+    version badge (e.g. `alpha.5`) so you can confirm the new build loaded.
+  - the **desktop** target loads a pinned *generation snapshot*, which
+    refreshes when dsh-desktop launches (close the app first, then
+    `install.bat -Target desktop`; `-Force` if the version did not change).
 - The desktop app's Safe Mode intentionally blocks third-party plugins; the
   normal profile loads them.
 - See [`docs/INSTALL.md`](docs/INSTALL.md) for the manual path and

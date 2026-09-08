@@ -289,9 +289,69 @@ function Get-InstalledBundles {
     return @($json.dsh.profile.bundles)
 }
 
+function Get-NodeModulePath {
+    param([string]$ProfileDir, [string]$Name)
+    $path = Join-Path $ProfileDir 'node_modules'
+    foreach ($part in ($Name -split '/')) { $path = Join-Path $path $part }
+    return $path
+}
+
+function Get-EffectiveInstalledVersion {
+    # The version the profile actually runs. For dsh-desktop that is the pinned
+    # "generation" snapshot (dsh.desktop.generationProjection), which the app
+    # launches independently of the raw node_modules folder; everywhere else it
+    # is the installed package's own version.
+    param($Target, [string]$Name)
+    $pkgJson = Join-Path $Target.ProfileDir 'package.json'
+    if (-not (Test-Path $pkgJson)) { return $null }
+    try {
+        $json = Get-Content $pkgJson -Raw -ErrorAction Stop | ConvertFrom-Json
+        $proj = $json.dsh.desktop.generationProjection.plugins
+        if ($proj) {
+            $entry = $proj.PSObject.Properties[$Name]
+            if ($entry -and $entry.Value -and $entry.Value.visibleVersion) {
+                return [string]$entry.Value.visibleVersion
+            }
+        }
+        $nm = Get-NodeModulePath -ProfileDir $Target.ProfileDir -Name $Name
+        $nmPkg = Join-Path $nm 'package.json'
+        if (Test-Path $nmPkg) {
+            $pkg = Get-Content $nmPkg -Raw -ErrorAction Stop | ConvertFrom-Json
+            if ($pkg.version) { return [string]$pkg.version }
+        }
+    }
+    catch {
+        return $null
+    }
+    return $null
+}
+
+function Test-LiveLink {
+    # True when the profile resolves the bundle straight into this repo's
+    # packages folder (a pnpm link/junction). Code edits then already apply to
+    # the installed bundle and a restart alone reloads them.
+    param($Target, [string]$Name, [string]$RepoPackagesRoot)
+    try {
+        $nm = Get-NodeModulePath -ProfileDir $Target.ProfileDir -Name $Name
+        if (-not (Test-Path $nm)) { return $false }
+        $item = Get-Item $nm -Force -ErrorAction Stop
+        $resolved = $item.FullName
+        if ($item.LinkType) {
+            try { $resolved = $item.Target } catch { $resolved = $item.FullName }
+        }
+        $root = [System.IO.Path]::GetFullPath($RepoPackagesRoot).TrimEnd('\')
+        $check = [System.IO.Path]::GetFullPath($resolved).TrimEnd('\')
+        return ($check -eq $root) -or $check.StartsWith($root + '\', [System.StringComparison]::OrdinalIgnoreCase)
+    }
+    catch {
+        return $false
+    }
+}
+
 function Install-To-Profile {
     param($Target, $Packages)
     $installed = Get-InstalledBundles -ProfileDir $Target.ProfileDir
+    $packagesRoot = Join-Path $repoRoot 'packages'
     Write-Host ''
     Write-Step "Target: $($Target.Label) - profile '$($Target.Profile)' at $($Target.ProfileDir)"
     if (-not (Test-Path $Target.ProfileDir)) { Write-Host "  (profile directory does not exist yet; 'dsh plugin add' initializes it)" }
@@ -299,10 +359,26 @@ function Install-To-Profile {
     foreach ($pkg in $Packages) {
         $already = $installed -contains $pkg.Name
         if ($already -and -not $Force) {
-            Write-Host "  - $($pkg.Name) $($pkg.Version): already installed (skip; use -Force to re-add)"
-            continue
+            $liveLink = Test-LiveLink -Target $Target -Name $pkg.Name -RepoPackagesRoot $packagesRoot
+            $effective = Get-EffectiveInstalledVersion -Target $Target -Name $pkg.Name
+            $versionChanged = [bool]$effective -and ($effective -ne $pkg.Version)
+            if (-not $versionChanged) {
+                if ($liveLink) {
+                    Write-Host "  - $($pkg.Name) $($pkg.Version): installed as a LIVE LINK into this repo - code edits already apply. Just restart the app to load them (no re-add needed)."
+                }
+                else {
+                    Write-Host "  - $($pkg.Name) $($pkg.Version): already installed and up to date (skip; use -Force to re-add)."
+                }
+                continue
+            }
+            Write-Host "  - $($pkg.Name): installed version '$effective' is behind repo version '$($pkg.Version)' - re-adding to sync..."
         }
-        Write-Host "  - adding $($pkg.Name) $($pkg.Version) ..."
+        elseif (-not $already -and -not $Force) {
+            Write-Host "  - adding $($pkg.Name) $($pkg.Version) (first install) ..."
+        }
+        else {
+            Write-Host "  - adding $($pkg.Name) $($pkg.Version) (-Force) ..."
+        }
         Invoke-Dsh -DshHome $Target.DshHome -ProfileDir $Target.ProfileDir -Arguments @('plugin', '--profile', $Target.Profile, 'add', $pkg.Folder)
         Write-Host "  - added $($pkg.Name)"
     }
@@ -354,10 +430,15 @@ if ($processed.Count -gt 0) {
     Write-Host ''
     Write-Host 'Next steps:'
     if ($processed -contains 'cli') {
-        Write-Host '  - CLI      : start with "npx @deepseek-ai/dsh web" and open the Focus panel (right side, next to the chat).'
+        Write-Host '  - CLI      : RESTART the app to load the changes. Stop the running'
+        Write-Host '              "npx @deepseek-ai/dsh web" (Ctrl+C), start it again, then'
+        Write-Host '              HARD-REFRESH the browser tab (Ctrl+F5). The client bundle'
+        Write-Host '              is read once at app boot, so restart is required after every'
+        Write-Host '              code change; open the Focus panel on the right to check it.'
     }
     if ($processed -contains 'desktop') {
-        Write-Host '  - Desktop  : relaunch dsh-desktop; the plugin is loaded from its normal profile (Safe Mode blocks it on purpose).'
+        Write-Host '  - Desktop  : relaunch dsh-desktop once so it refreshes its plugin'
+        Write-Host '              snapshot (Safe Mode blocks third-party plugins on purpose).'
     }
     if ($Target -eq 'all' -and $processed -notcontains 'desktop') {
         Write-Host '  - Desktop  : skipped - not installed on this machine yet.'

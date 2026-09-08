@@ -189,7 +189,20 @@ are driven by `install.bat` / `uninstall.bat`.
   npm is invoked through `npm.cmd` explicitly (a `npm.ps1` resolution mangles
   `pkg@version` arguments).
 - **Idempotency**: bundles already in `dsh.profile.bundles` are skipped
-  unless `-Force`.
+  unless `-Force` **or the repo version changed**.
+- **Dev sync**: `Get-EffectiveInstalledVersion` compares the repo
+  `package.json` version against the version the profile actually runs (for
+  dsh-desktop that is the pinned `dsh.desktop.generationProjection`
+  `visibleVersion`; elsewhere the installed package's own version). A plain
+  double-click of `install.bat` after a version bump therefore re-adds the
+  bundle, so development changes actually reach the targets.
+- **Live links**: both base profiles install `dsh-focus` as a `pnpm link:`
+  junction straight into `packages\dsh-focus` (`Test-LiveLink` detects this).
+  Code edits then already apply to the CLI bundle - a restart of
+  `npx @deepseek-ai/dsh web` plus a hard browser refresh is all it takes; the
+  installer prints that instead of re-adding. The desktop app additionally
+  launches a frozen generation snapshot that refreshes on the next dsh-desktop
+  launch (the CLI's `plugin add` cannot rewrite it).
 - **Uninstall** removes the package and therefore its patch layer (the
   `file-reference-local` override disappears with it).
 
@@ -207,7 +220,7 @@ are driven by `install.bat` / `uninstall.bat`.
 
 | Symptom | Cause / action |
 |---|---|
-| Old panel still showing after edit | client bundle is read at boot; reinstall with `-Force` and restart the app |
+| Old panel still showing after edit | client bundle is read at boot; restart the app and HARD-refresh the browser (Ctrl+F5). The CLI profile is a live link, so no reinstall is needed; the desktop needs one relaunch to refresh its generation snapshot |
 | Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; scripts now auto-match - re-run installer |
 | Desktop not detected | run DSH Desktop once so `harness\profiles` exists; pass `-DshHome`/`-ProfileName` to force |
 | Plugin missing in DSH Desktop | app launched in Safe Mode (blocks third-party plugins) |
