@@ -11,12 +11,15 @@
  *     calls ctx.layout.openDetails() the core empty "Details" placeholder can
  *     not pop up behind the panel either
  *   - the dock is sized from the same variable, so it always exactly fills
- *     the reserved strip; both animate with the core transition tokens and
- *     stay glued while the panel opens or closes
- *   - collapsed -> the strip closes (width 0) and Focus stays visible as a
- *     slim edge rail (like the collapsed left sidebar) with the expand
- *     control - never a close button
- *   - width     -> the drag grip at the panel's left edge resizes the strip
+ *     the reserved strip
+ *   - collapsed -> the strip shrinks to a fixed 56px (RAIL_W) and Focus shows
+ *     ONLY its slim edge rail inside that strip (like the collapsed left
+ *     sidebar) with the expand control - never a close button. The rail sits
+ *     next to the chat, never on top of it, and the dock is display:none, so
+ *     no second ghost bar can remain
+ *   - width     -> the drag grip at the panel's left edge resizes the strip.
+ *     Changes snap (no transitions): dock/rail display and the width variable
+ *     flip together, so chat is never overlapped mid-change
  *
  * The panel element itself lives in the empty core `shell.overlay` layer
  * (declared by ui-layout) and is re-parented into it when the core AppFrame
@@ -49,7 +52,7 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     const css = `
 .dsf-root{display:contents}
-.dsf-dock{position:absolute;top:0;right:0;bottom:0;width:var(--dsh-focus-w,0px);box-sizing:border-box;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff);overflow:hidden;padding-left:14px;transition:width var(--ds-transition-duration-slow,.2s) var(--ds-ease-in-out,ease-in-out)}
+.dsf-dock{position:absolute;top:0;right:0;bottom:0;width:var(--dsh-focus-w,0px);box-sizing:border-box;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff);overflow:hidden;padding-left:14px}
 .dsf-head{display:flex;align-items:center;gap:8px;padding:11px 12px 9px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.15));flex:none}
 .dsf-title{font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary,#1f1f1f);letter-spacing:.01em;white-space:nowrap}
 .dsf-badge{margin-left:2px;font-size:10px;line-height:16px;font-weight:500;border-radius:8px;padding:0 6px;color:var(--dsw-alias-label-tertiary,#8a8a8a);background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))}
@@ -91,7 +94,7 @@ window.__ModuleLoader__.load({
 .dsf-statusDot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-info-primary,rgba(79,140,255,.8))}
 .dsf-statusErrDot{background:var(--dsw-alias-state-error-primary,#d3382c)}
 .dsf-statusWarnDot{background:var(--dsw-alias-state-warning-primary,#d29922)}
-.dsf-rail{position:absolute;top:0;right:0;bottom:0;width:52px;display:flex;flex-direction:column;align-items:center;padding-top:8px;background:var(--dsw-alias-bg-base,var(--dsw-specific-sidebar-fill,#f7f7f8));border-left:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.25))}
+.dsf-rail{position:absolute;top:0;right:0;bottom:0;width:56px;display:flex;flex-direction:column;align-items:center;padding-top:8px;background:var(--dsw-alias-bg-base,var(--dsw-specific-sidebar-fill,#f7f7f8));border-left:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.25))}
 .dsf-railBtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary,#666);cursor:pointer;padding:0;margin-top:2px}
 .dsf-railBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12));color:var(--dsw-alias-label-primary,#1f1f1f)}
 .dsf-railLabel{writing-mode:vertical-rl;font-size:10px;letter-spacing:.12em;color:var(--dsw-alias-label-tertiary,#999);margin-top:8px;text-transform:uppercase}
@@ -99,14 +102,14 @@ window.__ModuleLoader__.load({
 .dsf-expand:hover{color:var(--dsw-alias-label-primary,#1f1f1f);background:var(--dsw-alias-button-floating-hover,rgba(127,127,127,.18))}
 /* Focus reserves its own right strip inside the core AppFrame: the frame's
    padding-right and the dock's width share one CSS variable, so the strip the
-   chat concedes always equals the panel that fills it. Both animate with the
-   core transition tokens; drags disable the transitions via .dsf-live. The
-   body prefix keeps this ahead of the core frame rule without beating the
-   core's own [data-dragging] transition kill. */
-body [data-dsh-focus-pad]{box-sizing:border-box;padding-right:var(--dsh-focus-w,0px);transition:padding-right var(--ds-transition-duration-slow,.2s) var(--ds-ease-in-out,ease-in-out)}
-body [data-dsh-focus-pad].dsf-live{transition:none}
-.dsf-dock.dsf-live{transition:none}
-@media (prefers-reduced-motion:reduce){body [data-dsh-focus-pad],.dsf-dock{transition:none}}
+   chat concedes always equals the panel that fills it. Changes snap - no
+   transitions - because every state flips the dock/rail display together with
+   the variable, so the chat is never overlapped and no intermediate strip can
+   show the core behind the panel. The collapsed state reserves a fixed 56px
+   (RAIL_W) and shows only the slim rail inside it, next to the chat, never on
+   top of it. The body prefix keeps this ahead of the core frame rule without
+   beating the core's own [data-dragging] transition kill. */
+body [data-dsh-focus-pad]{box-sizing:border-box;padding-right:var(--dsh-focus-w,0px)}
 `
     const CSS_TAG = 'dsh-focus/focus.css'
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
@@ -119,7 +122,7 @@ body [data-dsh-focus-pad].dsf-live{transition:none}
 
     // Version marker shown in the panel header so a freshly loaded bundle is
     // easy to verify after a restart. Keep in sync with package.json.
-    const PLUGIN_VERSION = '0.1.0-alpha.8'
+    const PLUGIN_VERSION = '0.1.0-alpha.9'
     const PLUGIN_BADGE = PLUGIN_VERSION.indexOf('-alpha.') >= 0 ? 'alpha.' + PLUGIN_VERSION.split('-alpha.')[1] : PLUGIN_VERSION
 
     // ---------------------------------------------------------------------
@@ -748,20 +751,27 @@ body [data-dsh-focus-pad].dsf-live{transition:none}
     }
 
     // ---------------------------------------------------------------------
-    // Plain-DOM fallback - same behavior (reserves the details track) when
-    // the React/slot path is unavailable.
+    // DOM renderer - the only active path (the React seat above is kept only
+    // as reference).
     // ---------------------------------------------------------------------
     function mountFallback(face, layout) {
+      // Duplicate-activation guard: one host in the DOM means another live
+      // mount already rendered its dock/rail. Stacking a second pair would
+      // show two bars on the right edge once collapsed.
+      if (typeof document !== 'undefined' && document.getElementById('dsh-focus-host')) {
+        return () => {}
+      }
       // Focus v6: reserve its own right strip inside the core AppFrame instead
       // of taking over the core "details" grid track. The frame gets
       // `padding-right: var(--dsh-focus-w)` (see the [data-dsh-focus-pad] CSS
       // rules), so the sidebar / conversation / core details column are
       // squeezed left and the chat is never covered. The dock is sized from
-      // the same variable, so it always exactly fills the reserved strip and
-      // both animate with the core transition tokens, keeping them glued while
-      // the panel opens or closes. Because Focus no longer calls
-      // ctx.layout.openDetails(), the core empty "Details" placeholder can
-      // never pop up behind the panel.
+      // the same variable, so it always exactly fills the reserved strip.
+      // Because Focus no longer calls ctx.layout.openDetails(), the core empty
+      // "Details" placeholder can never pop up behind the panel. The collapsed
+      // state keeps a fixed 56px strip (RAIL_W) with only the slim rail in it,
+      // so the rail sits BESIDE the chat - never on top of it - and no second
+      // (dock) bar can remain on screen.
       //
       // The core AppFrame can commit the [data-shell-overlay] layer AFTER this
       // plugin activates, so start on the document body and re-parent into the
@@ -769,6 +779,7 @@ body [data-dsh-focus-pad].dsf-live{transition:none}
       const FIXED_CSS = 'position:fixed;top:0;right:0;bottom:0;z-index:9999;pointer-events:none'
       const LAYER_CSS = 'position:absolute;top:0;right:0;bottom:0;pointer-events:none'
       const host = document.createElement('div')
+      host.id = 'dsh-focus-host'
       host.style.cssText = FIXED_CSS
       let layerEl = null
       let frame = null
@@ -790,6 +801,10 @@ body [data-dsh-focus-pad].dsf-live{transition:none}
       let dragging = false
 
       // ---- reserved-strip geometry --------------------------------------
+      // The collapsed edge rail keeps a fixed strip reserved (mirroring the
+      // core's collapsed left rail), so it sits BESIDE the chat instead of
+      // floating over it. Keep in sync with the .dsf-rail CSS width.
+      const RAIL_W = 56
       // The conversation keeps its usual 640px minimum (the same center
       // minimum the core layout concedes), so a strip width or a drag that
       // would crush the chat is never applied.
@@ -822,22 +837,21 @@ body [data-dsh-focus-pad].dsf-live{transition:none}
         return Math.max(min, Math.min(max, Math.round(w)))
       }
 
-      function desiredReserved() {
-        const st = face.getSnapshot()
-        if (!st || !st.open) return 0
-        if (availableForPanel() < 300) return 0 // no room: keep the edge rail
-        return clampPanelWidth(prefWidth)
-      }
-
       // Single writer for the reserved width: it flows to both the frame's
       // padding and the dock's width through one CSS variable, so the two can
-      // never disagree and no per-frame grid measurement is needed.
+      // never disagree and no per-frame grid measurement is needed. Exactly
+      // one element is visible at a time - the dock when expanded, the slim
+      // rail when collapsed - never both, so no ghost bar can remain. Changes
+      // snap: dock/rail display and the variable flip in the same frame.
       function applyVisible() {
         const st = face.getSnapshot()
-        const w = desiredReserved()
+        const open = !!st.open
+        const fits = availableForPanel() >= 300
+        const showing = open && fits
+        const w = showing ? clampPanelWidth(prefWidth) : RAIL_W
         curReserved = w
         if (frame && frame !== document.body) frame.style.setProperty('--dsh-focus-w', w + 'px')
-        const showing = !!st.open && w >= 300
+        dock.style.display = showing ? 'flex' : 'none'
         rail.style.display = showing ? 'none' : 'flex'
       }
 
@@ -1233,16 +1247,14 @@ body [data-dsh-focus-pad].dsf-live{transition:none}
       checkbox.addEventListener('change', () => face.setShowHidden(checkbox.checked))
 
       // ---- drag-to-resize the reserved strip (the panel's left edge) ----
-      // Sizes go straight to the CSS variable (no store round-trip per move);
-      // transitions are disabled for the drag so the edge tracks the pointer.
+      // Sizes go straight to the CSS variable (no store round-trip per move),
+      // so the edge tracks the pointer exactly.
       grip.addEventListener('pointerdown', (ev) => {
         const st = face.getSnapshot()
         if (!st || !st.open) return
         ev.preventDefault()
         dragging = true
         grip.classList.add('dsf-dragging')
-        if (frame && frame !== document.body) frame.classList.add('dsf-live')
-        dock.classList.add('dsf-live')
         const startX = ev.clientX
         const startWidth = curReserved >= 300 ? curReserved : clampPanelWidth(prefWidth)
         try {
@@ -1257,8 +1269,6 @@ body [data-dsh-focus-pad].dsf-live{transition:none}
         const onUp = () => {
           dragging = false
           grip.classList.remove('dsf-dragging')
-          dock.classList.remove('dsf-live')
-          if (frame && frame !== document.body) frame.classList.remove('dsf-live')
           window.removeEventListener('pointermove', onMove)
           window.removeEventListener('pointerup', onUp)
           window.removeEventListener('pointercancel', onUp)

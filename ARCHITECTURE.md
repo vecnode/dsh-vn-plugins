@@ -118,33 +118,38 @@ surface (alpha.8):
 
 The dock's width and the frame's padding-right share one CSS variable
 (`--dsh-focus-w`, written on the frame), so the strip the chat concedes
-always equals the panel that fills it; both animate with the core transition
-tokens and stay glued while opening/closing, so the core "Details" content
-never shows behind the panel.
+always equals the panel that fills it. Changes **snap** (no CSS transitions):
+open/collapsed state flips the dock<->rail display together with the
+variable, so the chat is never overlapped mid-change and the core "Details"
+content never shows behind the panel.
 
 **Resizing (drag divider)**: the dock renders its own edge grip at the
 panel's left edge (the only divider line - the dock has no border of its
-own). Dragging writes the CSS variable directly; transitions are disabled
-(`.dsf-live`) for the drag so the edge tracks the pointer, and the width is
-clamped to the core details contract range (300…520px) while the
-conversation keeps its 640px minimum. Open/collapsed state, width and the
-hidden toggle persist in `localStorage` (`dsh-focus.v1`).
+own). Dragging writes the CSS variable directly, so the edge tracks the
+pointer; the width is clamped to the core details contract range (300…520px)
+while the conversation keeps its 640px minimum. Open/collapsed state, width
+and the hidden toggle persist in `localStorage` (`dsh-focus.v1`).
 
-**Collapse/expand (always-visible bar)**: collapsing closes the strip
-(width 0 - chat regains the full width) and Focus renders as a slim 52px
-**rail** on the right edge, mirroring the collapsed left sidebar, with a
-panel-outline expand control and a vertical "FOCUS" label. Expanding
-re-opens the strip at the persisted width; both controls are reachable (the
-overlay host is pointer-events:none, so the rail opts back in explicitly).
-There is no close (x) affordance anywhere.
+**Collapse/expand (always-visible bar)**: collapsing shrinks the strip to a
+fixed 56px (`RAIL_W` - same as the core's collapsed left rail) and Focus
+shows **only** its slim **rail** inside that strip, mirroring the collapsed
+left sidebar: panel-outline expand control and a vertical "FOCUS" label. The
+rail therefore sits BESIDE the chat (the chat column is squeezed by 56px),
+never on top of it, and the dock is `display:none` while collapsed, so no
+second ghost bar can remain on screen. Expanding re-opens the strip at the
+persisted width; both controls are reachable (the overlay host is
+pointer-events:none, so the rail opts back in explicitly). There is no close
+(x) affordance anywhere. A duplicate-activation guard (one `#dsh-focus-host`
+element) keeps a second mount from stacking another dock/rail pair.
 
 **History (alpha.6/7)**: an early DOM panel bound itself to `document.body`
 forever and sat at width 0 (body has no grid tracks) - the core "Details"
 placeholder showed through an invisible dock while the track was open, and
 later versions borrowed the core details track and measured its live grid
-width. alpha.8 replaced that whole approach with the reserved strip above:
-the expand control can no longer be raced back to closed, and the core
-placeholder can no longer pop up behind the panel.
+width. alpha.8 replaced that whole approach with the reserved strip above;
+alpha.9 made the collapsed rail reserve its own 56px and hide the dock, so
+the rail no longer floats over the chat and exactly one Focus bar is visible
+in every state.
 
 ## 5. Focus data flow
 

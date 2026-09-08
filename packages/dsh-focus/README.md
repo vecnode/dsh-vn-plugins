@@ -9,21 +9,25 @@ Claude-Code style, using the native DSH design tokens.
 Collapsing Focus hands the space back to the chat and Focus stays visible as a
 slim **edge rail** on the right (like the collapsed left sidebar) with an
 expand control — it is never closed away and there is no close (x) button.
-The divider between the chat and the panel is a **drag handle**: pull it to
-resize the panel, and the open/collapsed state, panel width and the hidden
-toggle survive app restarts (`localStorage`).
+The rail keeps a fixed 56px strip reserved (the chat column is squeezed, never
+covered), and it is the **only** thing shown while collapsed — the dock is
+display:none, so no second ghost bar appears. The divider between the chat and
+the panel is a **drag handle**: pull it to resize the panel, and the
+open/collapsed state, panel width and the hidden toggle survive app restarts
+(`localStorage`).
 
 Alpha status: built against the shipped `@deepseek-ai/dsh@0.1.2-rc.1` surface
 and promoted to stable only when its owner says so.
 
-> How the space is reserved (alpha.8): Focus reserves its **own** strip inside
+> How the space is reserved (alpha.9): Focus reserves its **own** strip inside
 > the core AppFrame instead of borrowing the core "details" grid track. The
 > frame gets `padding-right` sized from a CSS variable (`--dsh-focus-w`, set on
 > the frame, box-sizing border-box), so the sidebar / conversation / core
 > details column are squeezed left and the chat is never overlapped. The dock
 > is sized from the same variable, so the strip the chat concedes always
-> equals the panel that fills it; both animate with the core transition tokens
-> and stay glued while opening/closing. Focus never calls
+> equals the panel that fills it. Changes snap (no CSS transitions):
+> open/closed state flips the dock↔rail display together with the variable, so
+> the chat is never overlapped mid-change. Focus never calls
 > `ctx.layout.openDetails()`, so the core empty "Details" placeholder can not
 > pop up behind the panel, and there is no state machine fighting the core
 > layout service (which also means the collapsed rail's expand control can not
@@ -32,8 +36,7 @@ and promoted to stable only when its owner says so.
 > `<body>`, waits for / re-parents itself into the `[data-shell-overlay]`
 > layer when the core AppFrame commits, then tags the frame
 > (`data-dsh-focus-pad`) and sizes the strip. Resizing writes only the CSS
-> variable; the drag grip disables transitions for the drag so the edge
-> tracks the pointer, and widths stay inside the core details contract range
+> variable, and widths stay inside the core details contract range
 > (300…520px) while the conversation keeps its 640px minimum.
 
 ## What the panel shows

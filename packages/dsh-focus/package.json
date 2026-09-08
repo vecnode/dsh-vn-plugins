@@ -1,6 +1,6 @@
 {
   "name": "dsh-focus",
-  "version": "0.1.0-alpha.8",
+  "version": "0.1.0-alpha.9",
   "description": "Focus: a right-side dock for the DeepSeek Harness Web UI that shows the contents of the folder the current conversation is in. Alpha.",
   "type": "module",
   "main": "lib/index.js",
