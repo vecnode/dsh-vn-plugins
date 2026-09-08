@@ -1,12 +1,21 @@
 # dsh-focus (alpha)
 
-**Focus** is a DeepSeek Harness Web UI plugin that docks a small panel on the
-right edge of the window and shows the folder the current conversation is
-working in — one row per file and folder, folders first, click to open
-folders — Claude-Code style, using the native DSH design tokens.
+**Focus** is a DeepSeek Harness Web UI plugin that adds a panel on the right
+edge of the window, mirroring the left navigation panel: a full-height column
+that collapses into a slim rail with expand/collapse controls. It shows a
+`lorem ipsum` placeholder plus the folder the current conversation is working
+in — one row per file and folder, folders first, click to open folders —
+Claude-Code style, using the native DSH design tokens.
 
 Alpha status: built against the shipped `@deepseek-ai/dsh@0.1.2-rc.1` surface
 and promoted to stable only when its owner says so.
+
+> On the rc.1 line the GUI has no third-party right-column seam (the native
+> right Sidebar arrives in a later release), so the panel docks over the
+> conversation's right edge via the empty core `shell.overlay` seat. If that
+> seat cannot be registered for any reason, the plugin mounts a plain-DOM
+> panel instead, so it always appears. When DSH ships the right-sidebar
+> extension API, only the mounting code changes.
 
 ## How it works (no custom host APIs)
 
@@ -26,11 +35,18 @@ no dependency on unpublished tooling, easy to keep working as DSH evolves.
 - `cordis.patch.yml` — bundle layer: raises the file-reference listing cap and
   inserts the `focus` row.
 - `lib/index.js` — Node half (no-op row so the client bundle ships).
-- `lib/client.js` — browser half: the dock component + focus store.
+- `lib/client.js` — browser half: the panel/rail component + focus store (+
+  plain-DOM fallback mount).
 
-## v1 scope (per owner)
+## Current content (alpha iteration)
 
-Only one function: **show the folder contents of the current conversation**.
-No live file watching, no diff view, no open-in-editor yet. Hidden dotfiles are
-hidden by default (toggle in the footer). When DeepSeek Harness ships the
-native right Sidebar extension seam, the dock is re-homed onto it.
+- A right-side panel **visible by default**: title "Focus", `alpha` badge, and
+  a collapse control. Collapsing leaves a slim rail (like the left panel's)
+  with an expand control and a vertical "Focus" label.
+- A `lorem ipsum` placeholder paragraph at the top of the panel.
+- A **Conversation folder** section below it once a conversation with a
+  working folder is selected (rows, folders first, hidden files via the
+  footer toggle). No live file watching, no diff view, no open-in-editor yet.
+
+When DeepSeek Harness ships the native right Sidebar extension seam, the panel
+is re-homed onto it.

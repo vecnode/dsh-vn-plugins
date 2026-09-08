@@ -161,13 +161,15 @@ function Resolve-DesktopTargets {
         $profilesRoot = Join-Path $candidate 'profiles'
         if (-not (Test-Path $profilesRoot)) { continue }
         foreach ($pdir in (Get-ChildItem $profilesRoot -Directory -ErrorAction SilentlyContinue)) {
-            if ($pdir.Name -match 'safe|rescue|recovery') { continue }
+            if ($pdir.Name -eq 'node_modules' -or $pdir.Name -match 'safe|rescue|recovery') { continue }
             $pkgJson = Join-Path $pdir.FullName 'package.json'
             if (-not (Test-Path $pkgJson)) { continue }
             $json = Get-Content $pkgJson -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
-            $isProfile = $json.dsh -and $json.dsh.profile -and $json.dsh.profile.bundles
-            $hasBase = ($json.dependencies.PSObject.Properties.Name -contains '@deepseek-ai/dsh-base')
-            if ($isProfile -and $hasBase) {
+            # A harness profile carries dsh.profile.bundles. Desktop profiles keep
+            # their dependencies empty (in-box bundles resolve from the desktop
+            # installation's own fallback), so do NOT require any dependency here.
+            $isProfile = $json.dsh -and $json.dsh.profile -and @($json.dsh.profile.bundles).Count -gt 0
+            if ($isProfile) {
                 $hits += [pscustomobject]@{
                     Label      = 'desktop'
                     DshHome    = $candidate
