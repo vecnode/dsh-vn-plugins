@@ -15,9 +15,11 @@
     desktop target is skipped with a warning and the run still succeeds. Only
     an explicit "-Target desktop" fails when no desktop profile can be found.
 
-    It pins the dsh CLI version from .dsh-version.json, bootstraps pnpm into
-    .\tools when pnpm is missing, then runs "dsh plugin --profile <p> add
-    <bundle folder>" for every bundle under .\packages (idempotent).
+    pnpm handling: each harness profile stores its pnpm layout in
+    node_modules\.modules.yaml. The CLI installs and dsh-desktop use different
+    pnpm majors and virtual-store-dir-max-length values, so the matching local
+    pnpm is bootstrapped under .\tools and invoked with the profile's own
+    settings.
 
 .PARAMETER Target
     Which install target(s): all | cli | desktop.
@@ -55,7 +57,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$toolsBin = Join-Path $repoRoot 'tools\node_modules\.bin'
 
 function Write-Step($msg) { Write-Host "[dsh-plugins] $msg" -ForegroundColor Cyan }
 
@@ -101,22 +102,57 @@ function Assert-Tool($name) {
     }
 }
 
-function Ensure-Pnpm {
-    $existing = Get-Command pnpm -ErrorAction SilentlyContinue
-    if ($existing) { Write-Verbose "Using pnpm from PATH: $($existing.Source)"; return }
-
-    $local = Join-Path $toolsBin 'pnpm.cmd'
-    if (-not (Test-Path $local)) {
-        Write-Step 'pnpm not found - bootstrapping a local copy under .\tools (no admin needed)...'
-        Assert-Tool 'npm'
-        & npm install --prefix (Join-Path $repoRoot 'tools') pnpm@9.15.9 --no-audit --no-fund 2>&1 | Out-Host
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $local)) { throw 'Failed to bootstrap pnpm into .\tools.' }
+# ---------------------------------------------------------------------------
+# pnpm helpers
+# ---------------------------------------------------------------------------
+function Get-PnpmStoreInfo {
+    # Reads node_modules\.modules.yaml for the pnpm major (store vN) and the
+    # virtual-store-dir-max-length the profile was created with.
+    param([string]$ProfileDir)
+    $info = @{ Major = 9; MaxLength = $null }
+    $yaml = Join-Path $ProfileDir 'node_modules\.modules.yaml'
+    if (-not (Test-Path $yaml)) { return $info }
+    $text = Get-Content $yaml -Raw -ErrorAction SilentlyContinue
+    if (-not $text) { return $info }
+    $m = [regex]::Match($text, 'store[\\/]+v(\d+)')
+    if ($m.Success) {
+        $major = 0
+        if ([int]::TryParse($m.Groups[1].Value, [ref]$major) -and $major -ge 10) { $info.Major = $major }
     }
-    # Expose the local pnpm shim to child processes (dsh spawns "pnpm" by name).
-    $env:PATH = (Join-Path $repoRoot 'tools\node_modules\.bin') + ';' + $env:PATH
-    Write-Verbose "Using local pnpm: $local"
+    $len = [regex]::Match($text, 'virtualStoreDirMaxLength["\s:]+(\d+)')
+    if ($len.Success) { $info.MaxLength = $len.Groups[1].Value }
+    return $info
 }
 
+function Ensure-PnpmForMajor {
+    # Bootstraps a local pnpm of the requested major under .\tools (no admin).
+    param([int]$Major)
+    $existing = Get-Command pnpm -ErrorAction SilentlyContinue
+    if ($existing) {
+        # System pnpm is fine when it is new enough for the requested major.
+        $vText = (& $existing.Source --version 2>$null)
+        $v = 0
+        if ($vText -and [int]::TryParse(($vText -split '\.')[0], [ref]$v) -and $v -ge $Major) {
+            return Split-Path $existing.Source
+        }
+    }
+    $prefix = Join-Path $repoRoot ("tools\pnpm" + $Major)
+    $binDir = Join-Path $prefix 'node_modules\.bin'
+    $local = Join-Path $binDir 'pnpm.cmd'
+    if (-not (Test-Path $local)) {
+        Write-Step "Bootstrapping local pnpm@$Major under .\tools (no admin needed)..."
+        $npmCmd = Get-Command npm.cmd -ErrorAction SilentlyContinue
+        if (-not $npmCmd) { $npmCmd = Get-Command npm -ErrorAction SilentlyContinue }
+        if (-not $npmCmd) { throw 'npm was not found (install Node.js first).' }
+        & $npmCmd.Source install --prefix $prefix "pnpm@$Major" --no-audit --no-fund 2>&1 | Out-Host
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $local)) { throw "Failed to bootstrap pnpm@$Major into .\tools." }
+    }
+    return $binDir
+}
+
+# ---------------------------------------------------------------------------
+# Target resolution
+# ---------------------------------------------------------------------------
 function Resolve-CliTarget {
     param([string]$HomeDir, [string]$Profile)
     if (-not $HomeDir) {
@@ -200,6 +236,9 @@ function Resolve-DesktopTargets {
     return @($hits)
 }
 
+# ---------------------------------------------------------------------------
+# dsh invocation
+# ---------------------------------------------------------------------------
 function Get-DshInvoker {
     $npx = Get-Command npx.cmd -ErrorAction SilentlyContinue
     if (-not $npx) { $npx = Get-Command npx -ErrorAction SilentlyContinue }
@@ -208,23 +247,35 @@ function Get-DshInvoker {
 }
 
 function Invoke-Dsh {
-    param([string]$DshHome, [string[]]$Arguments)
+    param([string]$DshHome, [string]$ProfileDir, [string[]]$Arguments)
     $npx = Get-DshInvoker
     $spec = "@deepseek-ai/dsh@$DshVersion"
-    Write-Verbose "DSH_HOME=$DshHome"
-    Write-Verbose "dsh $($Arguments -join ' ')"
+
+    # Use the pnpm major + virtual-store length the profile was created with.
+    $storeInfo = Get-PnpmStoreInfo -ProfileDir $ProfileDir
+    $pnpmBin = Ensure-PnpmForMajor -Major $storeInfo.Major
+    $oldPath = $env:PATH
     $oldHome = $env:DSH_HOME
+    $oldLen = $env:npm_config_virtual_store_dir_max_length
     # dsh profiles are pnpm workspace roots ("packages: [.]"); pnpm >= 9 refuses
     # a bare `add` there unless the root-check is opted out.
     $oldRootCheck = $env:npm_config_ignore_workspace_root_check
+
+    $env:PATH = $pnpmBin + ';' + $oldPath
     $env:DSH_HOME = $DshHome
+    if ($storeInfo.MaxLength) { $env:npm_config_virtual_store_dir_max_length = $storeInfo.MaxLength }
     $env:npm_config_ignore_workspace_root_check = 'true'
+    Write-Verbose "DSH_HOME=$DshHome"
+    Write-Verbose "pnpm=$pnpmBin  storeMajor=$($storeInfo.Major) maxLen=$($storeInfo.MaxLength)"
+    Write-Verbose "dsh $($Arguments -join ' ')"
     try {
         & $npx --yes $spec @Arguments 2>&1 | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "dsh exited with code $LASTEXITCODE (command: $spec $($Arguments -join ' '))" }
     }
     finally {
+        $env:PATH = $oldPath
         $env:DSH_HOME = $oldHome
+        $env:npm_config_virtual_store_dir_max_length = $oldLen
         $env:npm_config_ignore_workspace_root_check = $oldRootCheck
     }
 }
@@ -252,7 +303,7 @@ function Install-To-Profile {
             continue
         }
         Write-Host "  - adding $($pkg.Name) $($pkg.Version) ..."
-        Invoke-Dsh -DshHome $Target.DshHome -Arguments @('plugin', '--profile', $Target.Profile, 'add', $pkg.Folder)
+        Invoke-Dsh -DshHome $Target.DshHome -ProfileDir $Target.ProfileDir -Arguments @('plugin', '--profile', $Target.Profile, 'add', $pkg.Folder)
         Write-Host "  - added $($pkg.Name)"
     }
 }
@@ -267,7 +318,6 @@ Write-Step "Pinned dsh version: $DshVersion"
 
 Assert-Tool 'node'
 Assert-Tool 'npm'
-Ensure-Pnpm
 $packages = Get-Packages
 Write-Step ("Bundles to install: " + (($packages | ForEach-Object { $_.Name + '@' + $_.Version }) -join ', '))
 
@@ -304,7 +354,7 @@ if ($processed.Count -gt 0) {
     Write-Host ''
     Write-Host 'Next steps:'
     if ($processed -contains 'cli') {
-        Write-Host '  - CLI      : start with "npx @deepseek-ai/dsh web" and open the Focus dock (right edge of the window).'
+        Write-Host '  - CLI      : start with "npx @deepseek-ai/dsh web" and open the Focus panel (right side, next to the chat).'
     }
     if ($processed -contains 'desktop') {
         Write-Host '  - Desktop  : relaunch dsh-desktop; the plugin is loaded from its normal profile (Safe Mode blocks it on purpose).'

@@ -14,7 +14,7 @@ uninstall are clean on both targets and nothing patches core Harness files.
 
 | Package | What it does | Status |
 |---|---|---|
-| [`packages/dsh-focus`](packages/dsh-focus) | **Focus** — a right-edge dock listing the folder of the current conversation (files and folders as rows, folders first). | alpha `0.1.0-alpha.0` |
+| [`packages/dsh-focus`](packages/dsh-focus) | **Focus** — a real right-hand column next to the chat (never overlapping it): lorem-ipsum placeholder + full-width list of the current conversation's folder with the folder path on top. | alpha `0.1.0-alpha.2` |
 
 ## Install (Windows)
 
