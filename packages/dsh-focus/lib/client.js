@@ -1,23 +1,26 @@
 /**
  * dsh-focus - browser half.
  *
- * Renders the "Focus" panel as a real third column on the right of the chat,
- * mirroring the left navigation panel. It does not overlap the conversation:
- * the core layout already owns a right "details" grid track (opened/closed
- * through the cross-plugin ctx.layout service, and resizable by its own drag
- * handle). Focus occupies that track visually:
+ * Renders the "Focus" panel as a real right-hand column next to the chat,
+ * mirroring the left navigation panel. Focus reserves its OWN strip inside
+ * the core AppFrame instead of borrowing the core "details" grid track:
  *
- *   - on open  -> ctx.layout.openDetails()  (chat column shrinks, track widens)
- *   - closed   -> ctx.layout.closeDetails() (chat full width) + Focus stays
- *                 visible as a slim edge rail (like the collapsed left
- *                 sidebar) with the expand control - never a close button
- *   - width    -> tracked live from the frame's grid-template-columns, so the
- *                 panel follows the user's drag handle exactly
+ *   - the frame gets `padding-right: var(--dsh-focus-w)` (box-sizing
+ *     border-box), so the sidebar / conversation / core details column are
+ *     squeezed left - the chat is never overlapped, and because Focus never
+ *     calls ctx.layout.openDetails() the core empty "Details" placeholder can
+ *     not pop up behind the panel either
+ *   - the dock is sized from the same variable, so it always exactly fills
+ *     the reserved strip; both animate with the core transition tokens and
+ *     stay glued while the panel opens or closes
+ *   - collapsed -> the strip closes (width 0) and Focus stays visible as a
+ *     slim edge rail (like the collapsed left sidebar) with the expand
+ *     control - never a close button
+ *   - width     -> the drag grip at the panel's left edge resizes the strip
  *
- * The panel element itself lives in the empty core `shell.overlay` seat
- * (declared by ui-layout), so no core slot takeover is needed. If that seat
- * can not be registered for any reason, a plain-DOM fallback panel that
- * reserves the same track is mounted instead.
+ * The panel element itself lives in the empty core `shell.overlay` layer
+ * (declared by ui-layout) and is re-parented into it when the core AppFrame
+ * commits that layer; until then it starts on the document body.
  *
  * Content (alpha iteration per owner):
  *   - the current conversation's folder, listed as one row per file/folder
@@ -46,7 +49,7 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     const css = `
 .dsf-root{display:contents}
-.dsf-dock{position:absolute;top:0;right:0;bottom:0;width:360px;box-sizing:border-box;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff);border-left:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.25));overflow:hidden}
+.dsf-dock{position:absolute;top:0;right:0;bottom:0;width:var(--dsh-focus-w,0px);box-sizing:border-box;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff);overflow:hidden;padding-left:14px;transition:width var(--ds-transition-duration-slow,.2s) var(--ds-ease-in-out,ease-in-out)}
 .dsf-head{display:flex;align-items:center;gap:8px;padding:11px 12px 9px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.15));flex:none}
 .dsf-title{font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary,#1f1f1f);letter-spacing:.01em;white-space:nowrap}
 .dsf-badge{margin-left:2px;font-size:10px;line-height:16px;font-weight:500;border-radius:8px;padding:0 6px;color:var(--dsw-alias-label-tertiary,#8a8a8a);background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))}
@@ -66,9 +69,18 @@ window.__ModuleLoader__.load({
 .dsf-row{display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;text-align:left;border:0;background:transparent;border-radius:6px;padding:3px 8px;height:28px;color:var(--dsw-alias-label-primary,#1f1f1f);cursor:pointer;font:inherit;flex:none}
 .dsf-row:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.1))}
 .dsf-rowIcon{flex:none;display:inline-flex;color:var(--dsw-alias-label-secondary,#888)}
-.dsf-rowDir .dsf-rowIcon{color:#e8a33d}
 .dsf-rowName{flex:1;min-width:0;font-size:12.5px;line-height:18px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .dsf-chev{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#aaa)}
+.dsf-caretSlot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;font-size:9px;color:var(--dsw-alias-label-tertiary,#999)}
+.dsf-rowDir .dsf-caretSlot{color:var(--dsw-alias-label-secondary,#777)}
+.dsf-caret{display:inline-block;transition:transform .12s ease;transform:rotate(0deg);user-select:none;line-height:1}
+.dsf-rowOpen .dsf-caret{transform:rotate(90deg)}
+.dsf-grip{position:absolute;top:0;bottom:0;left:0;width:12px;cursor:col-resize;z-index:5;touch-action:none;background:transparent}
+.dsf-grip::after{content:'';position:absolute;top:0;bottom:0;left:0;width:1px;background:var(--dsw-alias-border-l3,rgba(127,127,127,.35))}
+.dsf-grip:hover::after,.dsf-grip.dsf-dragging::after{background:var(--dsw-alias-state-accent,#4f8cff);width:2px;left:0}
+.dsf-kids{display:flex;flex-direction:column}
+.dsf-kidsStatus{padding:3px 4px 3px 22px;color:var(--dsw-alias-label-tertiary,#999);font-size:12px;line-height:18px;display:flex;align-items:center;gap:6px}
+.dsf-kidsErr{color:var(--dsw-alias-state-error-primary,#d3382c);padding:3px 4px 3px 22px;font-size:12px;line-height:18px;word-break:break-word}
 .dsf-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px 7px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#999)}
 .dsf-count{white-space:nowrap}
 .dsf-toggle{display:inline-flex;align-items:center;gap:5px;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:2px 4px;border-radius:4px;user-select:none}
@@ -85,6 +97,16 @@ window.__ModuleLoader__.load({
 .dsf-railLabel{writing-mode:vertical-rl;font-size:10px;letter-spacing:.12em;color:var(--dsw-alias-label-tertiary,#999);margin-top:8px;text-transform:uppercase}
 .dsf-expand{position:absolute;top:50%;right:8px;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:30px;height:56px;border:0;border-radius:10px;cursor:pointer;color:var(--dsw-alias-label-secondary,#666);background:var(--dsw-alias-button-floating-fill,rgba(127,127,127,.1));box-shadow:0 0 0 .5px var(--dsw-alias-border-l3,rgba(127,127,127,.22));padding:0;z-index:1}
 .dsf-expand:hover{color:var(--dsw-alias-label-primary,#1f1f1f);background:var(--dsw-alias-button-floating-hover,rgba(127,127,127,.18))}
+/* Focus reserves its own right strip inside the core AppFrame: the frame's
+   padding-right and the dock's width share one CSS variable, so the strip the
+   chat concedes always equals the panel that fills it. Both animate with the
+   core transition tokens; drags disable the transitions via .dsf-live. The
+   body prefix keeps this ahead of the core frame rule without beating the
+   core's own [data-dragging] transition kill. */
+body [data-dsh-focus-pad]{box-sizing:border-box;padding-right:var(--dsh-focus-w,0px);transition:padding-right var(--ds-transition-duration-slow,.2s) var(--ds-ease-in-out,ease-in-out)}
+body [data-dsh-focus-pad].dsf-live{transition:none}
+.dsf-dock.dsf-live{transition:none}
+@media (prefers-reduced-motion:reduce){body [data-dsh-focus-pad],.dsf-dock{transition:none}}
 `
     const CSS_TAG = 'dsh-focus/focus.css'
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
@@ -97,7 +119,7 @@ window.__ModuleLoader__.load({
 
     // Version marker shown in the panel header so a freshly loaded bundle is
     // easy to verify after a restart. Keep in sync with package.json.
-    const PLUGIN_VERSION = '0.1.0-alpha.5'
+    const PLUGIN_VERSION = '0.1.0-alpha.8'
     const PLUGIN_BADGE = PLUGIN_VERSION.indexOf('-alpha.') >= 0 ? 'alpha.' + PLUGIN_VERSION.split('-alpha.')[1] : PLUGIN_VERSION
 
     // ---------------------------------------------------------------------
@@ -239,10 +261,11 @@ window.__ModuleLoader__.load({
       // ".", and that mode is fuzzy: it also returns non-hidden names that
       // merely contain a dot. The dotOnly flag keeps exactly the true hidden
       // entries from that batch (then merged + deduped with the plain batch).
-      async function listFolder(refs, signal) {
-        const base = dir === '' ? '' : dir + '/'
+      async function listFolder(path, refs, signal) {
+        const p = normRel(path)
+        const base = p === '' ? '' : p + '/'
         const jobs = [{ query: base, dotOnly: false }]
-        if (showHidden) jobs.push({ query: dir === '' ? './.' : dir + '/.', dotOnly: true })
+        if (showHidden) jobs.push({ query: p === '' ? './.' : p + '/.', dotOnly: true })
 
         let lastErr = null
         const results = await Promise.all(
@@ -317,7 +340,7 @@ window.__ModuleLoader__.load({
 
         const signal = controller.signal
         try {
-          const listed = await listFolder(refs, signal)
+          const listed = await listFolder(dir, refs, signal)
           if (signal.aborted) return
           entries = listed.entries
           truncated = listed.entries.length >= 1900
@@ -415,6 +438,16 @@ window.__ModuleLoader__.load({
           emit()
         },
         refresh,
+        loadPath(path, signal) {
+          // Public listing for a single folder path - used by the inline tree
+          // children loader. Same engine as refresh(), but scoped to an
+          // arbitrary path and without touching this store's own state.
+          if (disposed) return Promise.resolve(null)
+          if (!sessionId || !cwd) return Promise.resolve(null)
+          const refs = refsNow()
+          if (!refs) return Promise.resolve(null)
+          return listFolder(normRel(path), refs, signal)
+        },
         openDir(path) {
           dir = normRel(path)
           refresh()
@@ -491,7 +524,11 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
-    // Panel component - reserves/uses the core details track.
+    // (Historical / dead code - reference only) The React seat renderer from
+    // before alpha.7, when the plugin registered into the shell.overlay slot.
+    // Since alpha.7 the DOM renderer in mountFallback() below is the only
+    // active path, and Focus reserves its own strip instead of the core
+    // details track.
     // ---------------------------------------------------------------------
     function FocusPanel(props) {
       const face = props.focus
@@ -715,17 +752,107 @@ window.__ModuleLoader__.load({
     // the React/slot path is unavailable.
     // ---------------------------------------------------------------------
     function mountFallback(face, layout) {
-      // Prefer mounting inside the shell.overlay layer (its parent is the
-      // layout frame whose grid defines the right track); otherwise fall back
-      // to a fixed overlay on the document body.
-      const layerEl = document.querySelector('[data-shell-overlay]')
-      const frame = layerEl ? layerEl.parentElement : document.body
-
+      // Focus v6: reserve its own right strip inside the core AppFrame instead
+      // of taking over the core "details" grid track. The frame gets
+      // `padding-right: var(--dsh-focus-w)` (see the [data-dsh-focus-pad] CSS
+      // rules), so the sidebar / conversation / core details column are
+      // squeezed left and the chat is never covered. The dock is sized from
+      // the same variable, so it always exactly fills the reserved strip and
+      // both animate with the core transition tokens, keeping them glued while
+      // the panel opens or closes. Because Focus no longer calls
+      // ctx.layout.openDetails(), the core empty "Details" placeholder can
+      // never pop up behind the panel.
+      //
+      // The core AppFrame can commit the [data-shell-overlay] layer AFTER this
+      // plugin activates, so start on the document body and re-parent into the
+      // layer when it shows up (see attachToLayer() further down).
+      const FIXED_CSS = 'position:fixed;top:0;right:0;bottom:0;z-index:9999;pointer-events:none'
+      const LAYER_CSS = 'position:absolute;top:0;right:0;bottom:0;pointer-events:none'
       const host = document.createElement('div')
-      if (layerEl) {
-        host.style.cssText = 'position:absolute;top:0;right:0;bottom:0;pointer-events:none'
-      } else {
-        host.style.cssText = 'position:fixed;top:0;right:0;bottom:0;z-index:9999;pointer-events:none'
+      host.style.cssText = FIXED_CSS
+      let layerEl = null
+      let frame = null
+      let ro = null
+      let docMo = null
+      let hardTimer = null
+
+      // ---- persisted panel state (open / width / hidden toggle) ----
+      const STORAGE_KEY = 'dsh-focus.v1'
+      const savedState = (() => {
+        try {
+          return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}
+        } catch (e) {
+          return {}
+        }
+      })()
+      let prefWidth = savedState && typeof savedState.width === 'number' && savedState.width >= 200 ? savedState.width : 360
+      let curReserved = 0
+      let dragging = false
+
+      // ---- reserved-strip geometry --------------------------------------
+      // The conversation keeps its usual 640px minimum (the same center
+      // minimum the core layout concedes), so a strip width or a drag that
+      // would crush the chat is never applied.
+      function frameBoxWidth() {
+        return (frame && frame !== document.body ? frame.clientWidth : 0) || window.innerWidth || 1280
+      }
+
+      function sidebarWidthPx() {
+        if (!frame || frame === document.body) return 280
+        try {
+          const cols = String(frame.style.gridTemplateColumns || window.getComputedStyle(frame).gridTemplateColumns)
+            .split(/\s+/)
+            .filter(Boolean)
+          if (cols.length >= 3) {
+            const side = parseFloat(cols[0])
+            if (!isNaN(side) && side > 0) return side
+          }
+        } catch (e) {}
+        return 280
+      }
+
+      function availableForPanel() {
+        return Math.max(0, frameBoxWidth() - sidebarWidthPx() - 640)
+      }
+
+      // Inside the core details contract range; never past the chat minimum.
+      function clampPanelWidth(w) {
+        const min = 300
+        const max = Math.max(min, Math.min(520, availableForPanel()))
+        return Math.max(min, Math.min(max, Math.round(w)))
+      }
+
+      function desiredReserved() {
+        const st = face.getSnapshot()
+        if (!st || !st.open) return 0
+        if (availableForPanel() < 300) return 0 // no room: keep the edge rail
+        return clampPanelWidth(prefWidth)
+      }
+
+      // Single writer for the reserved width: it flows to both the frame's
+      // padding and the dock's width through one CSS variable, so the two can
+      // never disagree and no per-frame grid measurement is needed.
+      function applyVisible() {
+        const st = face.getSnapshot()
+        const w = desiredReserved()
+        curReserved = w
+        if (frame && frame !== document.body) frame.style.setProperty('--dsh-focus-w', w + 'px')
+        const showing = !!st.open && w >= 300
+        rail.style.display = showing ? 'none' : 'flex'
+      }
+
+      function persistState() {
+        try {
+          const st = face.getSnapshot()
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+              open: !!st.open,
+              hidden: !!st.showHidden,
+              width: Math.round(curReserved >= 300 ? curReserved : prefWidth),
+            }),
+          )
+        } catch (e) {}
       }
 
       const dock = document.createElement('div')
@@ -790,8 +917,11 @@ window.__ModuleLoader__.load({
       dock.appendChild(foot)
 
       // Slim rail used while collapsed (mirrors the collapsed left sidebar).
+      // The overlay host is pointer-events:none, so the rail and its expand
+      // button must opt back in or they can never be clicked.
       const rail = document.createElement('div')
       rail.className = 'dsf-rail'
+      rail.style.pointerEvents = 'auto'
       rail.setAttribute('role', 'complementary')
       rail.setAttribute('aria-label', 'Focus panel (collapsed)')
       const expandBtn = document.createElement('button')
@@ -809,47 +939,158 @@ window.__ModuleLoader__.load({
 
       host.appendChild(dock)
       host.appendChild(rail)
-      ;(layerEl || document.body).appendChild(host)
+      document.body.appendChild(host)
 
-      let hadPositive = false
-      const measure = () => {
-        let width = 0
-        try {
-          if (frame && frame !== document.body) {
-            const cols = window.getComputedStyle(frame).gridTemplateColumns
-            const last = parseFloat(cols.split(/\s+/).pop())
-            if (!isNaN(last)) width = Math.max(0, last)
+      // Divider grip: dragging it resizes the reserved strip. The grip sits at
+      // the panel's left edge and its line is the ONLY divider (the dock has
+      // no border of its own), so the edge reads as one clean drag handle.
+      const grip = document.createElement('div')
+      grip.className = 'dsf-grip'
+      grip.title = 'Drag to resize the Focus panel'
+      dock.appendChild(grip)
+
+      // Restore the collapsed/open state and the hidden-file toggle across
+      // restarts (folder expansions and scroll are intentionally not kept).
+      if (savedState && savedState.open === false) {
+        face.setOpenSilently(false)
+      }
+      if (savedState && typeof savedState.hidden === 'boolean' && savedState.hidden !== face.getSnapshot().showHidden) {
+        face.setShowHidden(savedState.hidden)
+      }
+
+      // -------------------------------------------------------------------
+      // Inline tree: folder rows expand in place (same panel, indented), they
+      // never navigate the panel into another view. Files have no glyph.
+      // -------------------------------------------------------------------
+      const expanded = new Set() // folder paths with their children shown
+      const kids = new Map() // path -> { status, entries?, error? }
+      const kidAborts = new Map() // path -> AbortController
+      let lastCtxKey = ''
+      let hiddenSeen = face.getSnapshot().showHidden
+
+      function clearKids(clearExpanded) {
+        for (const ac of kidAborts.values()) {
+          try {
+            ac.abort()
+          } catch (e) {}
+        }
+        kidAborts.clear()
+        kids.clear()
+        if (clearExpanded) expanded.clear()
+      }
+
+      function startKidLoad(path) {
+        const info = kids.get(path)
+        if (info && (info.status === 'loading' || info.status === 'ready')) return
+        kids.set(path, { status: 'loading' })
+        const ac = new AbortController()
+        kidAborts.set(path, ac)
+        face.loadPath(path, ac.signal).then(
+          (res) => {
+            kidAborts.delete(path)
+            if (ac.signal.aborted) return
+            if (!res) {
+              kids.set(path, { status: 'waiting' })
+              if (expanded.has(path)) {
+                setTimeout(() => {
+                  if (expanded.has(path)) startKidLoad(path)
+                }, 700)
+              }
+            } else if (res.error && (!res.entries || res.entries.length === 0)) {
+              kids.set(path, { status: 'error', error: String((res.error && (res.error.message || res.error.code)) || res.error) })
+            } else {
+              kids.set(path, { status: 'ready', entries: res.entries || [] })
+            }
+            if (expanded.has(path)) rerender()
+          },
+          () => {
+            kidAborts.delete(path)
+            if (!ac.signal.aborted) {
+              kids.set(path, { status: 'error', error: 'Could not list this folder.' })
+              if (expanded.has(path)) rerender()
+            }
+          },
+        )
+      }
+
+      function toggleDir(path) {
+        if (expanded.has(path)) {
+          expanded.delete(path)
+          const ac = kidAborts.get(path)
+          if (ac) {
+            try {
+              ac.abort()
+            } catch (e) {}
+            kidAborts.delete(path)
           }
-        } catch (e) {}
-        if (width >= 30) hadPositive = true
-        dock.style.width = Math.max(width - 14, 0) + 'px'
-        if (width < 30 && hadPositive) {
-          const st = face.getSnapshot()
-          if (st && st.open) face.setOpenSilently(false)
+          rerender()
+          return
+        }
+        expanded.add(path)
+        if (!kids.get(path) || kids.get(path).status !== 'ready') startKidLoad(path)
+        rerender()
+      }
+
+      function buildRow(entry, depth, st) {
+        const isDir = entry.kind === 'directory'
+        const isOpen = isDir && expanded.has(entry.path)
+        const row = document.createElement('button')
+        row.type = 'button'
+        row.className = 'dsf-row' + (isDir ? ' dsf-rowDir' : '') + (isOpen ? ' dsf-rowOpen' : '')
+        row.title = entry.path + (isDir ? '/' : '')
+        row.style.paddingLeft = 6 + depth * 16 + 'px'
+        const slot = document.createElement('span')
+        slot.className = 'dsf-caretSlot'
+        if (isDir) {
+          const caret = document.createElement('span')
+          caret.className = 'dsf-caret'
+          caret.textContent = '\u276f'
+          slot.appendChild(caret)
+        }
+        const label = document.createElement('span')
+        label.className = 'dsf-rowName' + (entry.name.charAt(0) === '.' ? ' dsf-rowNameDot' : '')
+        label.textContent = entry.name
+        row.appendChild(slot)
+        row.appendChild(label)
+        if (isDir) {
+          row.addEventListener('click', () => toggleDir(entry.path))
+        }
+        return row
+      }
+
+      function kidStatusEl(text, depth, isErr) {
+        const s = document.createElement('div')
+        s.className = isErr ? 'dsf-kidsErr' : 'dsf-kidsStatus'
+        s.style.paddingLeft = 22 + depth * 16 + 'px'
+        s.textContent = text
+        return s
+      }
+
+      function renderDir(hostEl, entries, depth, st) {
+        for (const entry of entries) {
+          const isDir = entry.kind === 'directory'
+          const isOpen = isDir && expanded.has(entry.path)
+          hostEl.appendChild(buildRow(entry, depth, st))
+          if (!isDir || !isOpen) continue
+          const info = kids.get(entry.path)
+          const childHost = document.createElement('div')
+          childHost.className = 'dsf-kids'
+          if (!info || info.status === 'loading') {
+            if (!info) startKidLoad(entry.path)
+            childHost.appendChild(kidStatusEl('Loading\u2026', depth + 1, false))
+          } else if (info.status === 'waiting') {
+            childHost.appendChild(kidStatusEl('Starting the folder service\u2026', depth + 1, false))
+          } else if (info.status === 'error') {
+            childHost.appendChild(kidStatusEl(info.error || 'Could not list this folder.', depth + 1, true))
+          } else {
+            renderDir(childHost, info.entries, depth + 1, st)
+          }
+          hostEl.appendChild(childHost)
         }
       }
 
-      function makeRow(name, opts) {
-        const row = document.createElement('button')
-        row.type = 'button'
-        row.className = 'dsf-row' + (opts.dir ? ' dsf-rowDir' : '')
-        if (opts.title) row.title = opts.title
-        const icon = document.createElement('span')
-        icon.className = 'dsf-rowIcon'
-        icon.textContent = opts.dir ? '\u25b8' : '\u00b7'
-        const label = document.createElement('span')
-        label.className = 'dsf-rowName' + (opts.dot ? ' dsf-rowNameDot' : '')
-        label.textContent = name
-        row.appendChild(icon)
-        row.appendChild(label)
-        if (opts.dir) {
-          const chev = document.createElement('span')
-          chev.className = 'dsf-chev'
-          chev.textContent = '>'
-          row.appendChild(chev)
-        }
-        if (opts.onClick) row.addEventListener('click', opts.onClick)
-        return row
+      const rerender = () => {
+        applyState(face.getSnapshot())
       }
 
       const renderBody = (st) => {
@@ -860,6 +1101,15 @@ window.__ModuleLoader__.load({
           hint.textContent = 'Open a conversation to see its folder here.'
           bodyEl.appendChild(hint)
           return
+        }
+        const ctxKey = st.sessionId + '|' + (st.cwd || '')
+        if (ctxKey !== lastCtxKey) {
+          lastCtxKey = ctxKey
+          clearKids(true) // a different conversation/folder: start a fresh tree
+        } else if (st.showHidden !== hiddenSeen) {
+          hiddenSeen = st.showHidden
+          clearKids(false) // keep the expanded folders, refetch their contents
+          for (const p of expanded) startKidLoad(p)
         }
         if (st.phase === 'waiting') {
           const status = document.createElement('div')
@@ -882,39 +1132,23 @@ window.__ModuleLoader__.load({
           bodyEl.appendChild(err)
           return
         }
+        const wrap = document.createElement('div')
+        wrap.className = 'dsf-body'
         if (st.entries.length === 0) {
           const hint = document.createElement('div')
           hint.className = 'dsf-empty'
           hint.textContent = st.showHidden
             ? 'No files to show here \u2014 excluded folders (node_modules, dist, \u2026) are skipped.'
             : 'No files to show here (hidden files are off).'
-          bodyEl.appendChild(hint)
-          return
+          wrap.appendChild(hint)
+        } else {
+          renderDir(wrap, st.entries, 0, st)
         }
-        if (st.dir) {
-          bodyEl.appendChild(makeRow('..', { title: 'Go up one folder', onClick: () => face.goUp() }))
-        }
-        for (const entry of st.entries) {
-          const isDir = entry.kind === 'directory'
-          bodyEl.appendChild(
-            makeRow(entry.name, {
-              dir: isDir,
-              dot: entry.name.charAt(0) === '.',
-              title: isDir ? entry.path + '/' : entry.path,
-              onClick: isDir
-                ? () => {
-                    face.openDir(entry.path)
-                  }
-                : undefined,
-            }),
-          )
-        }
+        bodyEl.appendChild(wrap)
       }
 
       const applyState = (st) => {
         const open = !!st.open
-        dock.style.display = open ? 'flex' : 'none'
-        rail.style.display = open ? 'none' : 'flex'
         collapseBtn.setAttribute('aria-expanded', open ? 'true' : 'false')
         expandBtn.setAttribute('aria-expanded', open ? 'true' : 'false')
         if (open && st.cwd) {
@@ -933,36 +1167,146 @@ window.__ModuleLoader__.load({
               : '\u00a0'
         }
         checkbox.checked = !!st.showHidden
-        if (layout) {
-          try {
-            if (open) layout.openDetails()
-            else layout.closeDetails()
-          } catch (e) {}
-        }
       }
+      function attachToLayer() {
+        const layer = document.querySelector('[data-shell-overlay]')
+        if (!layer) return false
+        if (!layerEl) {
+          layerEl = layer
+          host.style.cssText = LAYER_CSS
+          layer.appendChild(host) // moves the host inside the overlay layer
+          frame = layer.parentElement || document.body
+          if (frame && frame !== document.body) {
+            // Tag the frame so the reserved-strip CSS applies to it, then size
+            // it now. The ResizeObserver re-clamps when the window changes.
+            frame.setAttribute('data-dsh-focus-pad', '')
+            if (ro) ro.disconnect()
+            ro = new ResizeObserver(applyVisible)
+            ro.observe(frame)
+          }
+          if (docMo) {
+            docMo.disconnect()
+            docMo = null
+          }
+          if (hardTimer) {
+            clearTimeout(hardTimer)
+            hardTimer = null
+          }
+          applyVisible()
+        }
+        return true
+      }
+
       applyState(face.getSnapshot())
-      measure()
+      applyVisible()
       const off = face.subscribe(() => {
         applyState(face.getSnapshot())
-        measure()
+        applyVisible()
+        persistState()
       })
-      const ro = frame ? new ResizeObserver(measure) : null
-      if (ro) ro.observe(frame)
-      window.addEventListener('resize', measure)
-      const mo = frame ? new MutationObserver(measure) : null
-      if (mo) mo.observe(frame, { attributes: true, attributeFilter: ['style'] })
+      const onResize = () => {
+        applyVisible()
+        persistState()
+      }
+      window.addEventListener('resize', onResize)
 
-      expandBtn.addEventListener('click', () => face.openPanel())
-      collapseBtn.addEventListener('click', () => face.closePanel())
+      expandBtn.addEventListener('click', () => {
+        face.openPanel()
+        // openPanel() is a no-op when the panel is already open but had to
+        // drop to the rail for lack of space - re-apply so a re-expand works
+        // the moment there is room again.
+        applyVisible()
+        persistState()
+      })
+      collapseBtn.addEventListener('click', () => {
+        face.closePanel()
+        // Collapsing Focus also closes the core details column if the user
+        // had opened it, so the edge rail never covers the core panel.
+        if (layout) {
+          try {
+            layout.closeDetails()
+          } catch (e) {}
+        }
+        applyVisible()
+        persistState()
+      })
       checkbox.addEventListener('change', () => face.setShowHidden(checkbox.checked))
 
+      // ---- drag-to-resize the reserved strip (the panel's left edge) ----
+      // Sizes go straight to the CSS variable (no store round-trip per move);
+      // transitions are disabled for the drag so the edge tracks the pointer.
+      grip.addEventListener('pointerdown', (ev) => {
+        const st = face.getSnapshot()
+        if (!st || !st.open) return
+        ev.preventDefault()
+        dragging = true
+        grip.classList.add('dsf-dragging')
+        if (frame && frame !== document.body) frame.classList.add('dsf-live')
+        dock.classList.add('dsf-live')
+        const startX = ev.clientX
+        const startWidth = curReserved >= 300 ? curReserved : clampPanelWidth(prefWidth)
+        try {
+          grip.setPointerCapture(ev.pointerId)
+        } catch (e) {}
+        const onMove = (me) => {
+          if (!dragging) return
+          prefWidth = clampPanelWidth(startWidth + (startX - me.clientX))
+          curReserved = prefWidth
+          if (frame && frame !== document.body) frame.style.setProperty('--dsh-focus-w', prefWidth + 'px')
+        }
+        const onUp = () => {
+          dragging = false
+          grip.classList.remove('dsf-dragging')
+          dock.classList.remove('dsf-live')
+          if (frame && frame !== document.body) frame.classList.remove('dsf-live')
+          window.removeEventListener('pointermove', onMove)
+          window.removeEventListener('pointerup', onUp)
+          window.removeEventListener('pointercancel', onUp)
+          persistState()
+        }
+        window.addEventListener('pointermove', onMove)
+        window.addEventListener('pointerup', onUp)
+        window.addEventListener('pointercancel', onUp)
+      })
+
+      if (!attachToLayer()) {
+        // The core AppFrame (which owns the [data-shell-overlay] layer) can
+        // commit AFTER this plugin activates. Watch the document and re-parent
+        // the host into the layer the moment it exists.
+        docMo = new MutationObserver(() => {
+          attachToLayer()
+        })
+        docMo.observe(document.documentElement, { childList: true, subtree: true })
+        // Last resort: no overlay layer at all - float the panel, sized to
+        // the window, instead of reserving a strip.
+        hardTimer = setTimeout(() => {
+          if (!layerEl) {
+            const w = Math.max(240, Math.min(clampPanelWidth(prefWidth), Math.round((window.innerWidth || 1280) * 0.3)))
+            dock.style.width = w + 'px'
+            rail.style.display = 'none'
+          }
+        }, 4000)
+      }
+
       return () => {
+        dragging = false
         try {
           off()
         } catch (e) {}
         if (ro) ro.disconnect()
-        if (mo) mo.disconnect()
-        window.removeEventListener('resize', measure)
+        if (docMo) docMo.disconnect()
+        if (hardTimer) clearTimeout(hardTimer)
+        for (const ac of kidAborts.values()) {
+          try {
+            ac.abort()
+          } catch (e) {}
+        }
+        window.removeEventListener('resize', onResize)
+        // Release the reserved strip so the layout returns to core's own.
+        if (frame && frame !== document.body) {
+          frame.removeAttribute('data-dsh-focus-pad')
+          frame.style.removeProperty('--dsh-focus-w')
+        }
         if (host.parentNode) host.parentNode.removeChild(host)
       }
     }
@@ -970,10 +1314,9 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     // Plugin entry
     // ---------------------------------------------------------------------
-    const inject = ['slots', 'layout', 'sessions', 'remote', 'remote.fileReferences']
+    const inject = ['layout', 'sessions', 'remote', 'remote.fileReferences']
 
     function apply(ctx) {
-      const slots = ctx.get ? ctx.get('slots') || ctx.slots : ctx.slots
       const layout = ctx.get ? ctx.get('layout') : undefined
       const sessions = ctx.get ? ctx.get('sessions') : undefined
       const remote = ctx.get ? ctx.get('remote') : undefined
@@ -998,30 +1341,25 @@ window.__ModuleLoader__.load({
 
       const disposers = []
       try {
-        if (slots && sessions) {
+        // The DOM panel is the only renderer since alpha.7: the React
+        // shell.overlay seat registration is not reliable on rc.1 (it can
+        // throw or no-op depending on activation/mount order). The DOM panel
+        // re-parents itself into the shell.overlay layer when it exists and
+        // reserves its own right strip inside the frame (see mountFallback),
+        // so Focus always shows and never touches the core details column.
+        if (sessions && typeof document !== 'undefined') {
           const face = createFocusStore(getRefs, sessions)
-          let registered = false
-          try {
-            // shell.overlay is declared by the core layout entry; wait for its
-            // declaration, then occupy it (unoccupied in the shipped web app).
-            const disposer = slots.inject('shell.overlay', () =>
-              slots.register({ name: 'shell.overlay', inject: () => ({ focus: face, layout: layout }) }, FocusPanel),
-            )
-            if (typeof disposer === 'function') disposers.push(disposer)
-            disposers.push(face.dispose)
-            registered = true
-          } catch (err) {
-            ctx.logger?.warn?.('[dsh-focus] overlay seat unavailable, using fallback panel', err && err.message ? err.message : err)
-          }
-          if (!registered && typeof document !== 'undefined') {
-            disposers.push(mountFallback(face, layout))
-            disposers.push(face.dispose)
-          }
+          disposers.push(face.dispose)
+          disposers.push(mountFallback(face, layout))
         } else if (typeof document !== 'undefined') {
-          ctx.logger?.warn?.('[dsh-focus] required services missing - panel not mounted')
+          ctx.logger?.warn?.('[dsh-focus] sessions service missing - panel not mounted')
+          // eslint-disable-next-line no-console
+          console.error('[dsh-focus] sessions service missing - panel not mounted')
         }
       } catch (err) {
         ctx.logger?.warn?.('[dsh-focus] activation failed', err && err.message ? err.message : err)
+        // eslint-disable-next-line no-console
+        console.error('[dsh-focus] activation failed', err)
       }
 
       return () => {

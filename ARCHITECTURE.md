@@ -99,36 +99,52 @@ On the rc.1 line the GUI has NO third-party right-column seam: the layout is
 a three-track grid (`sidebar | conversation | details`) where the `details`
 track is single-occupant and owned by core `ui-chat`. Focus cannot occupy it.
 
-Instead Focus uses two supported levers:
+Instead Focus reserves its **own** strip inside the AppFrame plus a plain-DOM
+surface (alpha.8):
 
-1. **Geometry**: `ctx.layout.openDetails()` / `closeDetails()` - a
-   cross-plugin service that opens/closes the core right "details" track. With
-   the track open, the grid really reserves space and the chat column shrinks
-   (exactly the "after the middle column" behavior wanted). The track is also
-   resizable by its own drag handle.
-2. **Surface**: the panel element is registered into the `shell.overlay`
-   seat (declared by core `ui-layout`, unoccupied on rc.1). That layer is a
-   full-frame, pointer-events:none absolute layer whose direct children are
-   pointer-events:auto, so the panel can be placed absolutely without DOM
-   surgery or slot takeover.
+1. **Geometry**: the core AppFrame is tagged `data-dsh-focus-pad` and gets
+   `padding-right: var(--dsh-focus-w)` (box-sizing border-box), so the grid
+   (`sidebar | conversation | details`) is squeezed left and the chat really
+   shrinks. Focus no longer calls `ctx.layout.openDetails()`, so the core
+   empty "Details" placeholder can never open behind the panel and no layout
+   service state machine can fight the panel's open/collapsed state.
+2. **Surface**: a plain-DOM dock is the **sole** renderer - the React
+   `shell.overlay` seat registration (the empty `ui-layout` list seat) is kept
+   only as reference because on rc.1 it can throw or silently no-op depending
+   on activation/mount order. The dock starts on `document.body`
+   (position:fixed), **waits for / re-parents itself into the
+   `[data-shell-overlay]` layer** once the core AppFrame commits, then tags
+   the frame and sizes the strip.
 
-The panel **tracks the live grid width**: a `MutationObserver` on the layout
-frame reads `gridTemplateColumns`, so the panel always fills exactly the
-reserved track minus a 14px strip left for the core drag handle, and it
-follows the user's drag resizing. If the track is closed by the user/core
-while Focus thinks it is open, the plugin mirrors the closed state instead of
-fighting the layout.
+The dock's width and the frame's padding-right share one CSS variable
+(`--dsh-focus-w`, written on the frame), so the strip the chat concedes
+always equals the panel that fills it; both animate with the core transition
+tokens and stay glued while opening/closing, so the core "Details" content
+never shows behind the panel.
 
-**Collapse/expand (always-visible bar)**: collapsing calls
-`closeDetails()` (chat regains the width) and Focus renders as a slim 52px
+**Resizing (drag divider)**: the dock renders its own edge grip at the
+panel's left edge (the only divider line - the dock has no border of its
+own). Dragging writes the CSS variable directly; transitions are disabled
+(`.dsf-live`) for the drag so the edge tracks the pointer, and the width is
+clamped to the core details contract range (300…520px) while the
+conversation keeps its 640px minimum. Open/collapsed state, width and the
+hidden toggle persist in `localStorage` (`dsh-focus.v1`).
+
+**Collapse/expand (always-visible bar)**: collapsing closes the strip
+(width 0 - chat regains the full width) and Focus renders as a slim 52px
 **rail** on the right edge, mirroring the collapsed left sidebar, with a
-panel-outline expand control and a vertical "FOCUS" label. Expanding calls
-`openDetails()` again and renders the full column with the same panel-outline
-control in its header. There is no close (x) affordance anywhere.
+panel-outline expand control and a vertical "FOCUS" label. Expanding
+re-opens the strip at the persisted width; both controls are reachable (the
+overlay host is pointer-events:none, so the rail opts back in explicitly).
+There is no close (x) affordance anywhere.
 
-**Fallback**: if the `shell.overlay` seat cannot be registered, a plain-DOM
-fallback is mounted inside that same layer (or fixed on the body) and it
-reserves the details track identically, so the panel always appears.
+**History (alpha.6/7)**: an early DOM panel bound itself to `document.body`
+forever and sat at width 0 (body has no grid tracks) - the core "Details"
+placeholder showed through an invisible dock while the track was open, and
+later versions borrowed the core details track and measured its live grid
+width. alpha.8 replaced that whole approach with the reserved strip above:
+the expand control can no longer be raced back to closed, and the core
+placeholder can no longer pop up behind the panel.
 
 ## 5. Focus data flow
 
@@ -157,9 +173,13 @@ reserves the details track identically, so the panel always appears.
   after a session switch and otherwise looked empty).
 - Listing cap: the stock row caps answers at 20 rows, so `cordis.patch.yml`
   restates the `file-reference-local` row with `config.maxResults: 2000`.
-- Rendering: folder path on top (monospace), breadcrumbs once you drill in,
-  rows sorted folders-first then by name; folder rows open into the folder,
-  `..` goes up, dotfile rows are dimmed; a footer shows the item count and
+- Rendering: folder path on top (monospace), the folder's entries rendered as
+  an inline **tree** - folders first with a caret that rotates, files without
+  any glyph and folders not tinted; clicking a folder **expands it in place**
+  (indented) and deeper folders behave the same; expanded subfolders list
+  through the same engine as the root (`face.loadPath(path, signal)`, added
+  in alpha.7) with per-folder loading/error/waiting states. Dotfile rows are
+  dimmed; a footer shows the item count and
   the hidden toggle; waiting/loading/error/empty states are explicit.
 
 ## 6. The installer

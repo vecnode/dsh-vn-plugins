@@ -3,7 +3,7 @@
   "dsh": "0.1.2-rc.1",
   "packages": {
     "dsh-focus": {
-      "version": "0.1.0-alpha.5",
+      "version": "0.1.0-alpha.8",
       "rows": ["focus"],
       "rowOverrides": ["file-reference-local"]
     }
