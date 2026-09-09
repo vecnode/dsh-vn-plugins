@@ -70,7 +70,7 @@ window.__ModuleLoader__.load({
 .dse-dirty .dse-dirtyDot{opacity:1}
 .dse-dirtyText{flex:none;white-space:nowrap}
 .dse-body{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
-.dse-cm{flex:1;min-height:0;display:none;overflow:hidden}
+.dse-cm{position:absolute;left:0;right:0;top:0;bottom:0;display:none;overflow:hidden}
 .dse-cm.on{display:block}
 .dse-cm .cm-editor{height:100%}
 .dse-cm .cm-scroller{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12.5px;line-height:1.6}
@@ -663,12 +663,25 @@ window.__ModuleLoader__.load({
           langCompartment.of([]),
           wrapCompartment.of([CM.EditorView.lineWrapping]),
         )
-        const dark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-        if (dark) extensions.push(CM.oneDark)
+        // The editor ALWAYS renders on the dark oneDark palette (owner's
+        // choice): the Files dock uses dark design tokens, and oneDark keeps
+        // the text + syntax highlight palette readable on that dark grey
+        // background no matter what the OS or app scheme reports - so no
+        // prefers-color-scheme detection here.
+        extensions.push(CM.oneDark)
         const theme = CM.EditorView.theme({
-          '&': { height: '100%' },
-          '.cm-scroller': { fontFamily: "ui-monospace, 'Cascadia Code', Consolas, monospace", fontSize: '12.5px', lineHeight: '1.6' },
+          '&': { height: '100%', fontSize: '12.5px' },
           '&.cm-focused': { outline: 'none' },
+          // Gutters are transparent so the line-number strip always shares the
+          // exact code background (oneDark paints .cm-editor behind them).
+          '.cm-gutters': { backgroundColor: 'transparent' },
+          '.cm-activeLineGutter': { backgroundColor: 'transparent' },
+          '.cm-scroller': {
+            fontFamily: "ui-monospace, 'Cascadia Code', Consolas, monospace",
+            fontSize: '12.5px',
+            lineHeight: '1.6',
+            color: 'var(--dsw-alias-label-primary,#d4d4d4)',
+          },
         })
         extensions.push(theme)
         cm = new CM.EditorView({
