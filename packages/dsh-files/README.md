@@ -41,9 +41,9 @@ and promoted to stable only when its owner says so.
 > `<body>`, waits for / re-parents itself into the `[data-shell-overlay]`
 > layer when the core AppFrame commits, then tags the frame
 > (`data-dsh-files-pad`) and sizes the strip. Resizing writes only the CSS
-> variable, and widths stay inside the core details contract range
-> (300…520px) while the conversation keeps its 640px minimum. The **trigger
-> button**, by contrast, is a real React seat entry in the core
+> variable, and the width goes up to ~1040px (window permitting) while the
+> conversation keeps its 640px minimum. The **trigger button**, by contrast,
+> is a real React seat entry in the core
 > `conversation.session.header.utilities` list seat — the same seat that
 > carries the shipped "Session log" capsule — so it renders reliably inside
 > the React header (this seat is core-owned and proven, unlike the empty
@@ -63,7 +63,7 @@ and promoted to stable only when its owner says so.
   currently loaded rows client-side (name/path substring, instant) and a
   **refresh** button that re-lists the current folder and every expanded
   subfolder in place.
-- **Body**: the folder path on top, then the folder's entries as a **tree** —
+- **Body**: the folder's entries as a **tree** —
   folders first with a small caret; **click a folder and it expands inline
   under itself** (indented, deeper folders expand the same way, click again
   to collapse). Files have no glyph and folders are not tinted. **Dotfiles
@@ -87,7 +87,7 @@ the web composition — no server-side code in this plugin:
 | Where the panel lives | geometry: own reserved right strip — `padding-right` on the core AppFrame driven by one CSS variable; surface: a plain-DOM dock that re-parents itself into the `[data-shell-overlay]` layer when it commits | The chat column really shrinks; the core "Details" column is never opened by Files, so the empty core placeholder can not appear; the panel's left-edge grip resizes the strip |
 | Opening / closing | a React **"Files" trigger** registered in the core `conversation.session.header.utilities` seat (`ctx.slots.inject`), right of the shipped "Session log" capsule | The panel has no rail or in-dock close; the header button is the single trigger, and more plugins can register their own header triggers / tabs later |
 | Tabs | `createTabHost()` in `lib/client.js` keeps the open-set, order and active id; the DOM tab strip renders from it; each tab carries a close-x | Files is the only panel today, but adding one more descriptor + trigger gives a second Claude-style tab |
-| Resizing / persistence | no public width setter in `ctx.layout` → the dock writes the CSS variable only; state kept in `localStorage` (`dsh-files.v1`) | Width is clamped 300…520px (the core details contract) with the conversation kept ≥640px; open tabs, width and the hidden toggle survive restarts |
+| Resizing / persistence | no public width setter in `ctx.layout` → the dock writes the CSS variable only; state kept in `localStorage` (`dsh-files.v1`) | Width is clamped to ~1040px max (subject to window space) with the conversation kept ≥640px; open tabs, width and the hidden toggle survive restarts |
 | Folder contents | the `remote.fileReferences` namespace (`ctx.remote.fileReferences.list`) | Declared in `inject` like core `ui-reference` does; re-resolved on every refresh with a `waiting` retry phase, because the namespace is a service that can mount after Files activates. Expanded tree folders list through the same engine (`face.loadPath`) |
 | Rows cap | `cordis.patch.yml` restates the `file-reference-local` row with `maxResults: 2000` | The stock row caps every answer at 20 rows, which would truncate a real folder listing |
 | Search | toolbar input filters the **currently loaded** rows client-side | Instant and safe; whole-workspace fuzzy search is a follow-up (the same remote already supports bare-query search) |

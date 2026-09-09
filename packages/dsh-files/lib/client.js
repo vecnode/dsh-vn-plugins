@@ -61,18 +61,18 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     const css = `
 .dsf-root{display:contents}
-.dsf-dock{position:absolute;top:0;right:0;bottom:0;width:var(--dsh-files-w,0px);box-sizing:border-box;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff);overflow:hidden;padding-left:14px}
-.dsf-tabbar{flex:none;display:flex;align-items:center;gap:2px;padding:6px 8px 0 10px;min-width:0}
-.dsf-tabs{display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden}
-.dsf-tab{flex:none;display:inline-flex;align-items:center;gap:5px;max-width:150px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);cursor:pointer;padding:0 4px 0 8px;font:inherit;font-size:12.5px;white-space:nowrap}
+.dsf-dock{position:absolute;top:0;right:0;bottom:0;width:var(--dsh-files-w,0px);box-sizing:border-box;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff);overflow:hidden}
+.dsf-tabbar{flex:none;display:flex;align-items:center;gap:8px;height:32px;box-sizing:border-box;min-width:0;padding:0 8px 0 14px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.2))}
+.dsf-tabs{display:flex;align-items:stretch;gap:2px;min-width:0;overflow:hidden;height:100%}
+.dsf-tab{flex:none;display:inline-flex;align-items:center;gap:6px;max-width:170px;height:100%;box-sizing:border-box;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#666);cursor:pointer;padding:0 6px 0 10px;font:inherit;font-size:12.5px;white-space:nowrap}
 .dsf-tab:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.1));color:var(--dsw-alias-label-primary,#1f1f1f)}
-.dsf-tabActive{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#1f1f1f)}
+.dsf-tabActive{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#1f1f1f);box-shadow:inset 0 -2px 0 var(--dsw-alias-state-accent,#4f8cff)}
 .dsf-tabTitle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .dsf-tabX{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-tertiary,#999);cursor:pointer;padding:0;font-size:11px;line-height:1}
 .dsf-tabX:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.2));color:var(--dsw-alias-label-primary,#1f1f1f)}
 .dsf-tabbarRight{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0}
 .dsf-badge{flex:none;font-size:10px;line-height:16px;font-weight:500;border-radius:8px;padding:0 6px;color:var(--dsw-alias-label-tertiary,#8a8a8a);background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08));white-space:nowrap}
-.dsf-tools{flex:none;display:flex;align-items:center;gap:6px;padding:6px 8px 8px 10px}
+.dsf-tools{flex:none;display:flex;align-items:center;gap:6px;padding:8px 10px 8px 14px}
 .dsf-search{flex:1;min-width:0;height:26px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#1f1f1f);padding:0 26px 0 8px;font:inherit;font-size:12.5px;outline:none}
 .dsf-search::placeholder{color:var(--dsw-alias-label-tertiary,#999)}
 .dsf-search:focus{border-color:var(--dsw-alias-state-accent,#4f8cff)}
@@ -80,9 +80,7 @@ window.__ModuleLoader__.load({
 .dsf-searchWrap{position:relative;flex:1;min-width:0;display:flex;align-items:center}
 .dsf-headBtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);cursor:pointer;padding:0}
 .dsf-headBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12));color:var(--dsw-alias-label-primary,#1f1f1f)}
-.dsf-scroll{flex:1;min-height:0;overflow-y:auto;padding:6px 6px 10px 6px}
-.dsf-sectionTitle{margin:8px 4px 4px;font-size:11px;line-height:16px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary,#8a8a8a)}
-.dsf-path{margin:0 4px 6px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary,#666);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;direction:ltr;font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Consolas,monospace)}
+.dsf-scroll{flex:1;min-height:0;overflow-y:auto;padding:8px 10px 10px 14px}
 .dsf-empty{color:var(--dsw-alias-label-tertiary,#999);font-size:12px;line-height:18px;padding:6px 4px;text-align:left}
 .dsf-error{color:var(--dsw-alias-state-error-primary,#d3382c);font-size:12px;line-height:18px;padding:6px 4px;word-break:break-word}
 .dsf-body{width:100%;display:flex;flex-direction:column}
@@ -101,7 +99,7 @@ window.__ModuleLoader__.load({
 .dsf-kids{display:flex;flex-direction:column}
 .dsf-kidsStatus{padding:3px 4px 3px 22px;color:var(--dsw-alias-label-tertiary,#999);font-size:12px;line-height:18px;display:flex;align-items:center;gap:6px}
 .dsf-kidsErr{color:var(--dsw-alias-state-error-primary,#d3382c);padding:3px 4px 3px 22px;font-size:12px;line-height:18px;word-break:break-word}
-.dsf-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px 7px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#999)}
+.dsf-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 10px 7px 14px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#999)}
 .dsf-count{white-space:nowrap}
 .dsf-toggle{display:inline-flex;align-items:center;gap:5px;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:2px 4px;border-radius:4px;user-select:none}
 .dsf-toggle:hover{color:var(--dsw-alias-label-primary,#333)}
@@ -140,7 +138,7 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
 
     // Version marker shown in the panel header so a freshly loaded bundle is
     // easy to verify after a restart. Keep in sync with package.json.
-    const PLUGIN_VERSION = '0.1.0-alpha.10'
+    const PLUGIN_VERSION = '0.1.0-alpha.11'
     const PLUGIN_BADGE = PLUGIN_VERSION.indexOf('-alpha.') >= 0 ? 'alpha.' + PLUGIN_VERSION.split('-alpha.')[1] : PLUGIN_VERSION
 
     // ---------------------------------------------------------------------
@@ -610,10 +608,11 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
         return Math.max(0, frameBoxWidth() - sidebarWidthPx() - 640)
       }
 
-      // Inside the core details contract range; never past the chat minimum.
+      // The dock can go up to about twice the core "details" contract width
+      // (1040px) when the window allows, never past the chat minimum.
       function clampPanelWidth(w) {
         const min = 300
-        const max = Math.max(min, Math.min(520, availableForPanel()))
+        const max = Math.max(min, Math.min(1040, availableForPanel()))
         return Math.max(min, Math.min(max, Math.round(w)))
       }
 
@@ -728,15 +727,8 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
 
       const scroll = document.createElement('div')
       scroll.className = 'dsf-scroll'
-      const section = document.createElement('div')
-      section.className = 'dsf-sectionTitle'
-      section.textContent = 'Conversation folder'
-      const pathEl = document.createElement('div')
-      pathEl.className = 'dsf-path'
       const bodyEl = document.createElement('div')
       bodyEl.className = 'dsf-body'
-      scroll.appendChild(section)
-      scroll.appendChild(pathEl)
       scroll.appendChild(bodyEl)
 
       const foot = document.createElement('div')
@@ -993,14 +985,6 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
 
       const applyState = (st) => {
         const open = tabHost.getSnapshot().open && tabHost.getSnapshot().tabs.length > 0
-        if (open && st.cwd) {
-          pathEl.textContent = st.dir ? st.cwd.replace(/[\\/]+$/, '') + '/' + st.dir : st.cwd
-          pathEl.title = pathEl.textContent
-          pathEl.style.display = ''
-        } else {
-          pathEl.textContent = ''
-          pathEl.style.display = 'none'
-        }
         if (open) {
           lastVisibleRows = 0
           renderBody(st)

@@ -14,7 +14,7 @@ uninstall are clean on both targets and nothing patches core Harness files.
 
 | Package | What it does | Status |
 |---|---|---|
-| [`packages/dsh-files`](packages/dsh-files) | **Files** — a right-hand panel dock next to the chat (never overlapping it), opened with a **"Files" trigger** in the session header beside the "Session log" capsule. Claude-style tab strip with a close-x per panel, Claude-Code-style search + refresh toolbar, and the current conversation's folder as an inline tree (dotfiles on by default with a footer toggle). No collapsed rail: the panel is expanded or gone. | alpha `0.1.0-alpha.10` |
+| [`packages/dsh-files`](packages/dsh-files) | **Files** — a right-hand panel dock next to the chat (never overlapping it), opened with a **"Files" trigger** in the session header beside the "Session log" capsule. Claude-style tab strip with a close-x per panel, Claude-Code-style search + refresh toolbar, and the current conversation's folder as an inline tree (dotfiles on by default with a footer toggle). No collapsed rail: the panel is expanded or gone. | alpha `0.1.0-alpha.11` |
 
 ## Install (Windows)
 
@@ -68,7 +68,7 @@ dsh-files ships is reverted automatically.
     so code edits are already "installed" there — you only need to **restart**
     `npx @deepseek-ai/dsh web` and **hard-refresh** the browser (Ctrl+F5). The
     client bundle is read once at app boot; the panel tab bar now shows the
-    version badge (e.g. `alpha.10`) so you can confirm the new build loaded.
+    version badge (e.g. `alpha.11`) so you can confirm the new build loaded.
   - the **desktop** target loads a pinned *generation snapshot*, which
     refreshes when dsh-desktop launches (close the app first, then
     `install.bat -Target desktop`; `-Force` if the version did not change).

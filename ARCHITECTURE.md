@@ -153,8 +153,8 @@ again, or the tab's x, hides the dock.
 **Resizing (drag divider)**: the dock renders its own edge grip at the
 panel's left edge (the only divider line - the dock has no border of its
 own). Dragging writes the CSS variable directly, so the edge tracks the
-pointer; the width is clamped to the core details contract range (300...520px)
-while the conversation keeps its 640px minimum. Open tabs, width and the
+pointer; the width is clamped to at most ~1040px while the conversation keeps
+its 640px minimum. Open tabs, width and the
 hidden toggle persist in `localStorage` (`dsh-files.v1`).
 
 **Duplicate-activation guard**: one `#dsh-files-host` element keeps a second
@@ -196,7 +196,7 @@ expanded or gone and never floats.
   after a session switch and otherwise looked empty).
 - Listing cap: the stock row caps answers at 20 rows, so `cordis.patch.yml`
   restates the `file-reference-local` row with `config.maxResults: 2000`.
-- Rendering: folder path on top (monospace), the folder's entries rendered as
+- Rendering: the folder's entries rendered as
   an inline **tree** - folders first with a caret that rotates, files without
   any glyph and folders not tinted; clicking a folder **expands it in place**
   (indented) and deeper folders behave the same; expanded subfolders list

@@ -3,7 +3,7 @@
   "dsh": "0.1.2-rc.1",
   "packages": {
     "dsh-files": {
-      "version": "0.1.0-alpha.10",
+      "version": "0.1.0-alpha.11",
       "rows": ["files"],
       "rowOverrides": ["file-reference-local"]
     }

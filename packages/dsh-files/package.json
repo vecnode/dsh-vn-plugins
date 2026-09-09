@@ -1,6 +1,6 @@
 {
   "name": "dsh-files",
-  "version": "0.1.0-alpha.10",
+  "version": "0.1.0-alpha.11",
   "description": "Files: a right-side dock for the DeepSeek Harness Web UI that shows the contents of the folder the current conversation is in. Tabbed panel host (Claude-style tabs with close-x), triggered from the session header. Alpha.",
   "type": "module",
   "main": "lib/index.js",
