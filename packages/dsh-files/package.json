@@ -1,7 +1,7 @@
 {
-  "name": "dsh-focus",
-  "version": "0.1.0-alpha.9",
-  "description": "Focus: a right-side dock for the DeepSeek Harness Web UI that shows the contents of the folder the current conversation is in. Alpha.",
+  "name": "dsh-files",
+  "version": "0.1.0-alpha.10",
+  "description": "Files: a right-side dock for the DeepSeek Harness Web UI that shows the contents of the folder the current conversation is in. Tabbed panel host (Claude-style tabs with close-x), triggered from the session header. Alpha.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -25,9 +25,9 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-session",
-        "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-api-remotes",
         "@deepseek-ai/dsh-api-session-controller"
       ]

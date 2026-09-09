@@ -1,7 +1,7 @@
 /**
- * dsh-focus — Node half.
+ * dsh-files — Node half.
  *
- * The Focus panel is a browser plugin: it renders inside the Web GUI and reads
+ * The Files panel is a browser plugin: it renders inside the Web GUI and reads
  * everything it needs (session list, session cwd, folder listings) through
  * supported client services and Remotes that ship with the web composition
  * (sessions + session file references, the same service the `@` file menu
@@ -12,7 +12,7 @@
  * the plugin keeps working when DeepSeek Harness evolves its API surface.
  */
 
-export const name = 'dsh-focus'
+export const name = 'dsh-files'
 
 /**
  * Activate the plugin row.
@@ -20,9 +20,9 @@ export const name = 'dsh-focus'
  */
 export function apply(ctx) {
   ctx.effect(() => {
-    ctx.logger?.debug?.('[dsh-focus] node half active (alpha)')
+    ctx.logger?.debug?.('[dsh-files] node half active (alpha)')
     return () => {
-      ctx.logger?.debug?.('[dsh-focus] node half disposed')
+      ctx.logger?.debug?.('[dsh-files] node half disposed')
     }
-  }, 'dsh-focus: node half')
+  }, 'dsh-files: node half')
 }

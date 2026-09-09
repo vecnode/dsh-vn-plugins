@@ -3,7 +3,7 @@
 .SYNOPSIS
     Removes the dsh-vn-plugins bundle set from DeepSeek Harness profiles
     (cli and/or dsh-desktop). Removing a bundle also removes its patch layer,
-    so the file-reference override shipped by dsh-focus is reverted too.
+    so the file-reference override shipped by dsh-files is reverted too.
 
 .DESCRIPTION
     With -Target all (the default) a machine without dsh-desktop is fine: the
@@ -222,6 +222,16 @@ function Remove-From-Profile {
     Write-Host ''
     Write-Step "Target: $($Target.Label) - profile '$($Target.Profile)' at $($Target.ProfileDir)"
     if (-not (Test-Path $Target.ProfileDir)) { Write-Host '  (profile not present - nothing to do)'; return }
+    # Legacy rename cleanup: this pack shipped the panel as 'dsh-focus' before
+    # alpha.10 renamed it to 'dsh-files'; remove any stale old-name bundle too.
+    $legacyNames = @('dsh-focus')
+    foreach ($legacy in $legacyNames) {
+        if ($installed -contains $legacy) {
+            Write-Host "  - removing legacy bundle '$legacy' (renamed to dsh-files) ..."
+            Invoke-Dsh -DshHome $Target.DshHome -ProfileDir $Target.ProfileDir -Arguments @('plugin', '--profile', $Target.Profile, 'remove', $legacy)
+            Write-Host "  - removed legacy bundle '$legacy'"
+        }
+    }
     foreach ($pkg in $Packages) {
         if ($installed -notcontains $pkg.Name) {
             Write-Host "  - $($pkg.Name): not installed (skip)"

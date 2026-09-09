@@ -18,9 +18,9 @@ Everything is a standard dsh **bundle**: an npm package with
 ## Layout
 
 - `packages/<bundle>/` - one standalone bundle per plugin. Today:
-  - `packages/dsh-focus/lib/index.js` - Node half (minimal row so the client bundle ships)
-  - `packages/dsh-focus/lib/client.js` - browser half (single file, NO build step)
-  - `packages/dsh-focus/cordis.patch.yml` - bundle layer (rows + config overrides)
+  - `packages/dsh-files/lib/index.js` - Node half (minimal row so the client bundle ships)
+  - `packages/dsh-files/lib/client.js` - browser half (single file, NO build step)
+  - `packages/dsh-files/cordis.patch.yml` - bundle layer (rows + config overrides)
 - `scripts/install-all.ps1` / `uninstall-all.ps1` (+ `.bat`, plus root
   `install.bat` / `uninstall.bat`)
 - `.dsh-version.json` - the pinned dsh version and per-package versions
@@ -35,8 +35,8 @@ Everything is a standard dsh **bundle**: an npm package with
 3. Never touch DeepSeek core packages, the harness profile internals beyond
    what `dsh plugin` does, or API keys.
 4. The browser bundle is read at harness boot. Both base profiles install
-   `dsh-focus` as a live link into this repo, so after editing
-   `packages/dsh-focus/lib/client.js` the CLI only needs a RESTART of
+   `dsh-files` as a live link into this repo, so after editing
+   `packages/dsh-files/lib/client.js` the CLI only needs a RESTART of
    `npx @deepseek-ai/dsh web` plus a hard browser refresh (Ctrl+F5) - no
    reinstall. Reinstall (`install.bat`, which re-adds on version change, or
    `-Force`) only refreshes the desktop generation, and the desktop snapshot
@@ -47,7 +47,10 @@ Everything is a standard dsh **bundle**: an npm package with
    imports; you may `require("react")`; reach core services through
    `ctx.get(...)` after declaring them in the exported `inject` array
    (e.g. `["slots","layout","sessions","remote"]`). Mirror how core consumers
-   (ui-chat, ui-reference, ui-sidebar) do it.
+   (ui-chat, ui-reference, ui-sidebar) do it. UI surface that must sit in the
+   React tree (like the "Files" trigger next to the core "Session log"
+   capsule) registers through `ctx.slots.inject` into a core-declared list
+   seat - same as the shipped header-action plugins.
 6. Installer scripts are Windows PowerShell 5.1-compatible AND ASCII-only
    (smart quotes/dashes have broken parsing before). After editing a `.ps1`,
    run a parser check (see below).
@@ -69,11 +72,17 @@ Everything runs through `npx --yes @deepseek-ai/dsh@<pinned>`; pnpm is
 bootstrapped locally under `tools\pnpm<major>` (the profile's pnpm major is
 read from `node_modules\.modules.yaml`).
 
+> Package renames: the panel was `dsh-focus` (row `focus`) until alpha.10,
+> when it became `dsh-files` (row `files`). Both install scripts carry a
+> `$legacyNames = @('dsh-focus')` prune so an upgraded profile drops the old
+> bundle instead of double-mounting. Add renamed packages to that list in both
+> scripts.
+
 ## Iterating on a change (quick loop)
 
 ```powershell
 # 1. syntax-check a JS/PS file
-node --check packages/dsh-focus/lib/client.js
+node --check packages/dsh-files/lib/client.js
 $t=$null;$e=$null; [System.Management.Automation.Language.Parser]::ParseFile(
   'scripts/install-all.ps1',[ref]$t,[ref]$e); $e.Count   # expect 0
 
@@ -84,7 +93,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-all.ps1 -Tar
 $env:DSH_HOME = "$env:USERPROFILE\.dsh"
 npx --yes @deepseek-ai/dsh@0.1.2-rc.1 web --no-open --port 3099   # background
 # then GET http://127.0.0.1:3099/?token=<token-from-log>, find the
-# /plugins/??...dsh-focus/client.js URL in the HTML and confirm markers.
+# /plugins/??...dsh-files/client.js URL in the HTML and confirm markers.
 
 # 4. commit as vecnode and push
 git add -A; git commit -m "describe the change"; git push
@@ -96,6 +105,6 @@ git add -A; git commit -m "describe the change"; git push
 - [ ] `.ps1` files still parse and are ASCII-only
 - [ ] version bumped (`packages/.../package.json` + `.dsh-version.json`) and
       installed with `-Force` to both targets when behavior changed
-- [ ] README/`packages/dsh-focus/README.md` bullets updated
+- [ ] README/`packages/dsh-files/README.md` bullets updated
 - [ ] no core-file or profile-file edits beyond the installer's own writes
 - [ ] pushed to `origin` (`main`) as vecnode

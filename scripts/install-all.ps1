@@ -356,6 +356,20 @@ function Install-To-Profile {
     Write-Step "Target: $($Target.Label) - profile '$($Target.Profile)' at $($Target.ProfileDir)"
     if (-not (Test-Path $Target.ProfileDir)) { Write-Host "  (profile directory does not exist yet; 'dsh plugin add' initializes it)" }
 
+    # Legacy rename: this pack used to ship the panel as 'dsh-focus' (row id
+    # 'focus'); it is now 'dsh-files' (row id 'files'). A profile still listing
+    # the old name would keep its bundle and patch layer after the new one is
+    # added, mounting a second dock and double-patching file-reference-local.
+    # Remove known old names before adding, so the rename is clean on upgrade.
+    $legacyNames = @('dsh-focus')
+    foreach ($legacy in $legacyNames) {
+        if ($installed -contains $legacy) {
+            Write-Host "  - removing legacy bundle '$legacy' (renamed to dsh-files) ..."
+            Invoke-Dsh -DshHome $Target.DshHome -ProfileDir $Target.ProfileDir -Arguments @('plugin', '--profile', $Target.Profile, 'remove', $legacy)
+            Write-Host "  - removed legacy bundle '$legacy'"
+        }
+    }
+
     foreach ($pkg in $Packages) {
         $already = $installed -contains $pkg.Name
         if ($already -and -not $Force) {
@@ -434,7 +448,7 @@ if ($processed.Count -gt 0) {
         Write-Host '              "npx @deepseek-ai/dsh web" (Ctrl+C), start it again, then'
         Write-Host '              HARD-REFRESH the browser tab (Ctrl+F5). The client bundle'
         Write-Host '              is read once at app boot, so restart is required after every'
-        Write-Host '              code change; open the Focus panel on the right to check it.'
+        Write-Host '              code change; open the Files panel with the header button.'
     }
     if ($processed -contains 'desktop') {
         Write-Host '  - Desktop  : relaunch dsh-desktop once so it refreshes its plugin'

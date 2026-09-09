@@ -1,8 +1,8 @@
 /**
- * dsh-focus — browser half entry types (node half is JS-only today).
+ * dsh-files — browser half entry types (node half is JS-only today).
  */
 
-export declare const name: 'dsh-focus'
+export declare const name: 'dsh-files'
 
 export interface ContextLike {
   logger?: { debug?: (...args: unknown[]) => void; info?: (...args: unknown[]) => void }
