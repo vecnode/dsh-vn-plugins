@@ -50,6 +50,16 @@ packages/dsh-files/
   lib/client.js       # browser half (module-table bundle; hand-written, no build)
 ```
 
+```
+packages/dsh-editor/
+  package.json        # name, version, dsh.bundle + dsh.client, exports
+  cordis.patch.yml    # inserts 'editor' row (nothing else patched)
+  lib/index.js        # Node half: authenticated /api/dsh-editor routes (file + vendor)
+  lib/client.js       # browser half (module-table bundle; hand-written, no build)
+  lib/vendor/cm6.min.js   # GENERATED vendored CodeMirror 6 classic bundle (commit it)
+  vendor/entry.js, package.json  # reproducible CM6 build inputs (see its README)
+```
+
 > History: the plugin was `dsh-focus` (row `focus`) through alpha.9. alpha.10
 > renamed it to `dsh-files` (row `files`) and reworked the dock into a
 > tabbed panel host. `scripts/install-all.ps1` / `uninstall-all.ps1` prune
@@ -139,7 +149,12 @@ open panel is a Claude-style **tab** in a strip on top of the dock; every tab
 has its own close **x**. Files is the only registered panel today, but the
 host (`createTabHost`) owns the open-set/order/active state and the tab strip
 is rendered from it, so a future plugin adds a second descriptor and its own
-header trigger and gets a second tab for free.
+header trigger and gets a second tab for free. alpha.12 realized that: the
+content under the tab strip now switches per **active** panel (Files' chrome
+is the built-in `files` section; other panels mount their own section lazily)
+and the dock publishes a window host API (`window.__dshFilesHost`, event
+`dsh-files:host-ready`) that sibling bundles use to register their panel —
+`dsh-editor` is the first (see §6).
 
 **No collapsed rail (alpha.10)**: the old always-visible edge rail is gone.
 A panel is either expanded (its strip is reserved and the dock shows) or fully
@@ -210,7 +225,51 @@ expanded or gone and never floats.
   fuzzy search is a follow-up (the same remote already supports bare-query
   search). Refresh re-lists the current folder and every expanded subfolder.
 
-## 6. The installer
+## 6. The Editor tab (dsh-editor)
+
+Files stays the dock owner; **dsh-editor** is the first panel that *registers
+into* it (a second standalone bundle, discovered by the installer like every
+other package under `packages/`). The two bundles never share code: they meet
+only on `window.__dshFilesHost`.
+
+**The dock host contract (alpha.12, in dsh-files `lib/client.js`):**
+
+- `registerPanel({ id, title, mount, acceptsOpenFile? })` — merge a descriptor
+  into the dock's panel registry. `mount(el)` is called once, lazily, when the
+  panel's tab first becomes active; it returns the panel controller.
+- `openPanel/closePanel/activatePanel/togglePanel/isOpenPanel/getSnapshot/
+  subscribe` — the tab host (same store Files' own trigger reads).
+- `dispatchOpenFile(file)` — the Files tree calls this when a file row is
+  double-clicked (rows stay inert without a registered `acceptsOpenFile`
+  panel). It opens the first such panel and forwards
+  `{ name, path, cwd, sessionId }` — `cwd` is the conversation folder the
+  Files store is already scoped to.
+- The host fires `dsh-files:host-ready` after publishing, and the editor
+  bundle polls briefly as a fallback, so activation order does not matter.
+
+**Editing without a file-content remote.** On the rc.1 line the client only
+`list`s file references; nothing reads or writes file bytes. Mirroring the
+shipped `dsh-session-log-export` ZIP route, the editor's Node half registers
+**authenticated routes** on the `connection` service (`inject: ["connection"]`):
+
+| Route | Behavior |
+|---|---|
+| `GET /api/dsh-editor/file?cwd&path` | realpath-containment check inside the conversation cwd; strict UTF-8 decode + NUL rejection (`NOT_TEXT` → binary files cannot open); ≤ 2 MiB; returns `{text, version, mtimeMs, size}` |
+| `PUT /api/dsh-editor/file` | same containment; atomic temp-file + rename; optimistic guard — the echoed `mtimeMs`/`size` must match or it answers `409 CHANGED_ON_DISK` instead of clobbering |
+| `GET /api/dsh-editor/vendor` | streams the vendored CodeMirror 6 classic bundle (committed `lib/vendor/cm6.min.js`, generated from `vendor/entry.js`, see the package README) |
+
+The plain-fs row deliberately avoids the tool-layer fs sandbox/policy state
+(it mirrors how `file-reference-local` reads cwd files with `node:fs` +
+realpath) and only ever touches paths the owner's own GUI asks for.
+
+**Browser half** registers the "Editor" capsule (same
+`conversation.session.header.utilities` seat, `order: 200` → right of Files),
+then lazily loads the vendored CM6 bundle on the first open, fetches the text
+file, edits in CodeMirror, and saves on the toolbar button or Ctrl/Cmd+S.
+`lib/client.js` is hand-written module-table code with **no build step**; only
+the CM6 artifact is generated (when the version set changes).
+
+## 7. The installer
 
 `scripts/install-all.ps1` / `uninstall-all.ps1` (PowerShell 5.1, ASCII only)
 are driven by `install.bat` / `uninstall.bat`.
@@ -258,7 +317,7 @@ are driven by `install.bat` / `uninstall.bat`.
 - **Uninstall** removes the package and therefore its patch layer (the
   `file-reference-local` override disappears with it).
 
-## 7. Versioning and upgrade path
+## 8. Versioning and upgrade path
 
 - `.dsh-version.json` pins the dsh line and per-package versions.
 - Packages stay `-alpha.N` until the owner says "make it stable".
@@ -269,7 +328,7 @@ are driven by `install.bat` / `uninstall.bat`.
   `lib/client.js` mounting code - the tab host already mirrors the shape of
   such a registry).
 
-## 8. Troubleshooting quick table
+## 9. Troubleshooting quick table
 
 | Symptom | Cause / action |
 |---|---|

@@ -3,9 +3,14 @@
   "dsh": "0.1.2-rc.1",
   "packages": {
     "dsh-files": {
-      "version": "0.1.0-alpha.11",
+      "version": "0.1.0-alpha.12",
       "rows": ["files"],
       "rowOverrides": ["file-reference-local"]
+    },
+    "dsh-editor": {
+      "version": "0.1.0-alpha.1",
+      "rows": ["editor"],
+      "rowOverrides": []
     }
   }
 }

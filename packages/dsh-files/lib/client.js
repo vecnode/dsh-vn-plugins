@@ -126,6 +126,14 @@ window.__ModuleLoader__.load({
    reopens the panel). The body prefix keeps this ahead of the core frame rule
    without beating the core's own [data-dragging] transition kill. */
 body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,0px)}
+/* Multi-panel content (alpha.12): the area under the tab strip is one
+   content host; each open panel type owns a section that fills it. The Files
+   chrome (tools/scroll/foot) lives in the 'files' section exactly as before;
+   other registered panels mount their own section lazily. Only the active
+   section is visible, so Files keeps its exact layout when its tab is up. */
+.dsf-content{flex:1;min-height:0;display:flex;flex-direction:column;min-width:0}
+.dsf-sec{flex:1;min-height:0;display:none;flex-direction:column;min-width:0;overflow:hidden}
+.dsf-secActive{display:flex}
 `
     const CSS_TAG = 'dsh-files/files.css'
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
@@ -138,7 +146,7 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
 
     // Version marker shown in the panel header so a freshly loaded bundle is
     // easy to verify after a restart. Keep in sync with package.json.
-    const PLUGIN_VERSION = '0.1.0-alpha.11'
+    const PLUGIN_VERSION = '0.1.0-alpha.12'
     const PLUGIN_BADGE = PLUGIN_VERSION.indexOf('-alpha.') >= 0 ? 'alpha.' + PLUGIN_VERSION.split('-alpha.')[1] : PLUGIN_VERSION
 
     // ---------------------------------------------------------------------
@@ -568,6 +576,14 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
       let ro = null
       let docMo = null
       let hardTimer = null
+      // ---- multi-panel content (alpha.12) ----
+      // contentHost holds one .dsf-sec section per registered panel type
+      // (built lazily); the Files chrome lives in the 'files' section so its
+      // DOM, layout and behavior are untouched. panelRuntime tracks each
+      // non-files section's element, mount state and mounted controller.
+      let contentHost = null
+      let filesSection = null
+      const panelRuntime = new Map() // panel id -> { el, mounted, ctrl }
 
       // ---- persisted panel state (open tabs / width / hidden toggle) ----
       const STORAGE_KEY = 'dsh-files.v1'
@@ -748,9 +764,19 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
       foot.appendChild(toggle)
 
       dock.appendChild(tabbar)
-      dock.appendChild(tools)
-      dock.appendChild(scroll)
-      dock.appendChild(foot)
+
+      // The Files chrome (tools / scroll / foot) becomes the 'files' section
+      // inside a shared content host, so other registered panels can own the
+      // area under the tab strip when their tab is active.
+      contentHost = document.createElement('div')
+      contentHost.className = 'dsf-content'
+      filesSection = document.createElement('div')
+      filesSection.className = 'dsf-sec'
+      contentHost.appendChild(filesSection)
+      filesSection.appendChild(tools)
+      filesSection.appendChild(scroll)
+      filesSection.appendChild(foot)
+      dock.appendChild(contentHost)
 
       host.appendChild(dock)
       document.body.appendChild(host)
@@ -863,7 +889,10 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
         const row = document.createElement('button')
         row.type = 'button'
         row.className = 'dsf-row' + (isDir ? ' dsf-rowDir' : '') + (isOpen ? ' dsf-rowOpen' : '')
-        row.title = entry.path + (isDir ? '/' : '')
+        row.title =
+          entry.path +
+          (isDir ? '/' : '') +
+          (isDir || !hasOpenTarget() ? '' : ' (double-click to open in the Editor)')
         row.style.paddingLeft = 6 + depth * 16 + 'px'
         const slot = document.createElement('span')
         slot.className = 'dsf-caretSlot'
@@ -880,6 +909,18 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
         row.appendChild(label)
         if (isDir) {
           row.addEventListener('click', () => toggleDir(entry.path))
+        } else {
+          // A file row never navigates; double-clicking hands the file to the
+          // registered open-capable panel (the Editor) with the current
+          // conversation context the listing is scoped to.
+          row.addEventListener('dblclick', () => {
+            dispatchOpenFile({
+              name: entry.name,
+              path: entry.path,
+              cwd: st.cwd,
+              sessionId: st.sessionId,
+            })
+          })
         }
         return row
       }
@@ -983,6 +1024,110 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
         bodyEl.appendChild(wrap)
       }
 
+      // ---- per-panel sections + external panel registration (alpha.12) ----
+      // The tab strip above already renders every open panel id; this part owns
+      // the CONTENT under the strip. 'files' is the built-in section (the Files
+      // chrome assembled above). Any other id registered through the window
+      // host API gets a lazily mounted .dsf-sec section whose controller can
+      // additionally receive files from the Files tree (double-click a row).
+      function panelOpen() {
+        const s = tabHost.getSnapshot()
+        return s.open && s.tabs.length > 0
+      }
+
+      function ensureSection(id) {
+        let run = panelRuntime.get(id)
+        if (run) return run
+        const el = document.createElement('div')
+        el.className = 'dsf-sec'
+        contentHost.appendChild(el)
+        run = { el, mounted: false, ctrl: null }
+        panelRuntime.set(id, run)
+        return run
+      }
+
+      function mountSection(id) {
+        const run = ensureSection(id)
+        if (run.mounted) return run.ctrl
+        const desc = PANELS[id]
+        run.mounted = true
+        if (!desc || typeof desc.mount !== 'function') return run.ctrl
+        try {
+          run.ctrl = desc.mount(run.el) || null
+        } catch (err) {
+          // a throwing panel must not break the dock
+          // eslint-disable-next-line no-console
+          console.error('[dsh-files] panel mount failed (' + id + ')', err)
+        }
+        return run.ctrl
+      }
+
+      // The Files chrome stays the active section whenever the active tab is
+      // Files (or a not-yet-registered id); a registered foreign panel's
+      // section shows when its tab is active and is mounted on first use.
+      function applyPanelSections() {
+        if (!contentHost) return
+        const st = tabHost.getSnapshot()
+        const active = st.active
+        const foreignActive = active !== FILES_ID && !!PANELS[active] && typeof PANELS[active].mount === 'function'
+        filesSection.classList.toggle('dsf-secActive', !foreignActive)
+        for (const id of Object.keys(PANELS)) {
+          if (id === FILES_ID) continue
+          const run = ensureSection(id)
+          const isActive = active === id
+          run.el.classList.toggle('dsf-secActive', isActive)
+          if (isActive && panelOpen()) mountSection(id)
+        }
+      }
+
+      // External bundles (dsh-editor) register their panel here; the entry is
+      // merged so a late registration also fills in a persisted tab's title.
+      function registerPanel(desc) {
+        if (!desc || typeof desc.id !== 'string' || !desc.id || typeof desc.title !== 'string') return false
+        PANELS[desc.id] = Object.assign({}, PANELS[desc.id], desc)
+        try {
+          applyPanelSections()
+        } catch (e) {}
+        try {
+          renderTabs()
+        } catch (e) {}
+        return true
+      }
+
+      // Open the first registered panel that accepts files with one file from
+      // the Files tree. The receiving controller decides whether the file can
+      // open (text-only is enforced by the editor service).
+      function dispatchOpenFile(file) {
+        if (!file || typeof file.path !== 'string') return false
+        for (const id of Object.keys(PANELS)) {
+          const desc = PANELS[id]
+          if (id === FILES_ID || !desc || !desc.acceptsOpenFile || typeof desc.mount !== 'function') continue
+          tabHost.openPanel(id)
+          applyPanelSections()
+          const ctrl = mountSection(id)
+          if (ctrl && typeof ctrl.openFile === 'function') {
+            try {
+              ctrl.openFile(file)
+            } catch (err) {
+              // eslint-disable-next-line no-console
+              console.error('[dsh-files] openFile failed (' + id + ')', err)
+            }
+            return true
+          }
+          return false
+        }
+        return false
+      }
+
+      // True while some registered panel can open files - gates the row hint.
+      function hasOpenTarget() {
+        for (const id of Object.keys(PANELS)) {
+          const desc = PANELS[id]
+          if (id !== FILES_ID && desc && desc.acceptsOpenFile) return true
+        }
+        return false
+      }
+
       const applyState = (st) => {
         const open = tabHost.getSnapshot().open && tabHost.getSnapshot().tabs.length > 0
         if (open) {
@@ -999,6 +1144,7 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
           }
         }
         checkbox.checked = !!st.showHidden
+        applyPanelSections()
       }
       function attachToLayer() {
         const layer = document.querySelector('[data-shell-overlay]')
@@ -1147,8 +1293,34 @@ body [data-dsh-files-pad]{box-sizing:border-box;padding-right:var(--dsh-files-w,
         }, 4000)
       }
 
+      // Publish the dock host API so sibling bundles (dsh-editor) can register
+      // their panel into this dock, toggle it, and receive files from the
+      // Files tree. dsh-files owns the dock; every other bundle joins it here.
+      const hostApi = {
+        registerPanel,
+        isOpenPanel: (id) => tabHost.isOpenPanel(id),
+        openPanel: (id) => tabHost.openPanel(id),
+        closePanel: (id) => tabHost.closePanel(id),
+        activatePanel: (id) => tabHost.activatePanel(id),
+        togglePanel: (id) => tabHost.togglePanel(id),
+        getSnapshot: () => tabHost.getSnapshot(),
+        subscribe: (listener) => tabHost.subscribe(listener),
+        dispatchOpenFile,
+      }
+      window.__dshFilesHost = hostApi
+      try {
+        window.dispatchEvent(new Event('dsh-files:host-ready'))
+      } catch (e) {}
+
       return () => {
         dragging = false
+        if (window.__dshFilesHost === hostApi) {
+          try {
+            delete window.__dshFilesHost
+          } catch (e) {
+            window.__dshFilesHost = undefined
+          }
+        }
         try {
           offFiles()
         } catch (e) {}

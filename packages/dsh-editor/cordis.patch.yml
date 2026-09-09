@@ -1,0 +1,11 @@
+# dsh-editor bundle layer (alpha).
+#
+# Applied on top of the shipped web bundle rows. This plugin registers ONE
+# extra row ('editor') that owns the plugin's Node half (the authenticated
+# /api/dsh-editor/* routes) and therefore ships its browser half (dsh.client)
+# with the Loader entry. Nothing else is patched: the tab itself lives in the
+# dsh-files dock, which this panel registers into through the window bridge
+# dsh-files publishes.
+- insert:
+    - id: editor
+      name: 'dsh-editor'

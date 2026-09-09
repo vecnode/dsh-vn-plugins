@@ -7,9 +7,16 @@ as an inline **tree**: click a folder and it expands in place, indented,
 Claude-Code style, using the native DSH design tokens.
 
 The dock is a small **tab host**: open panels show as Claude-style tabs in a
-strip on top of the dock, and every tab has a close **x**. Files is the only
-registered panel today, but the host is shaped so more panels (plugins) can be
-added later as more tabs.
+strip on top of the dock, and every tab has a close **x**. Files is the
+built-in panel; since alpha.12 the host also accepts **external panels** —
+`dsh-editor` (the Editor tab) registers itself through the window host API this
+plugin publishes (`window.__dshFilesHost`, event `dsh-files:host-ready`), so
+each plugin keeps its own bundle while sharing one dock, tab strip, resize grip
+and persistence. The content under the tab strip switches per **active** tab:
+Files' own chrome is the `files` section; a registered foreign panel gets a
+lazily mounted section that fills the same area. Files' browsing behavior is
+unchanged — and with the Editor installed, **double-clicking a file row** hands
+that file to the Editor (folders still expand on a single click).
 
 Opening is **button-driven**: a **"Files"** trigger sits in the session header
 beside the shipped **"Session log"** capsule (the core
@@ -55,10 +62,14 @@ and promoted to stable only when its owner says so.
 
 ## What the panel shows
 
-- **Tab strip**: one Claude-style tab (`Files`) with a close **x**; the
-  `alpha` badge sits at the strip's right so a freshly loaded bundle is easy
-  to verify. The tab's x (or pressing the header "Files" trigger while open)
-  hides the whole dock.
+- **Tab strip**: one Claude-style tab per open panel (`Files`, and `Editor`
+  when dsh-editor is installed) with a close **x**; the `alpha` badge sits at
+  the strip's right so a freshly loaded bundle is easy to verify. The active
+  tab's x (or pressing its header trigger while open) hides the whole dock when
+  it was the last one open.
+- **File rows** can be opened: with dsh-editor installed, double-clicking a
+  file row opens it in the Editor tab (text-only files; binary is refused there).
+  Folder rows still expand in place on a single click.
 - **Toolbar** (Claude-Code look): a **search input** that filters the
   currently loaded rows client-side (name/path substring, instant) and a
   **refresh** button that re-lists the current folder and every expanded

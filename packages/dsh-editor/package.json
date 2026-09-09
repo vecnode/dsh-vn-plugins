@@ -1,15 +1,11 @@
 {
-  "name": "dsh-files",
-  "version": "0.1.0-alpha.12",
-  "description": "Files: a right-side dock for the DeepSeek Harness Web UI that shows the contents of the folder the current conversation is in. Tabbed panel host (Claude-style tabs with close-x) that other plugins can register into - dsh-editor ships as the second tab. Triggered from the session header. Alpha.",
+  "name": "dsh-editor",
+  "version": "0.1.0-alpha.1",
+  "description": "Editor: a code/text editor tab in the Files right dock for the DeepSeek Harness Web UI. Opens text files from the Files panel, edits them with a vendored CodeMirror 6, and saves them back to disk through an authenticated plugin route. Alpha.",
   "type": "module",
   "main": "lib/index.js",
-  "types": "lib/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "default": "./lib/index.js"
-    },
+    ".": "./lib/index.js",
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },

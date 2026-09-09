@@ -19,8 +19,12 @@ Everything is a standard dsh **bundle**: an npm package with
 
 - `packages/<bundle>/` - one standalone bundle per plugin. Today:
   - `packages/dsh-files/lib/index.js` - Node half (minimal row so the client bundle ships)
-  - `packages/dsh-files/lib/client.js` - browser half (single file, NO build step)
+  - `packages/dsh-files/lib/client.js` - browser half (single file, NO build step); owns the right dock / tab host and publishes `window.__dshFilesHost`
   - `packages/dsh-files/cordis.patch.yml` - bundle layer (rows + config overrides)
+  - `packages/dsh-editor/lib/index.js` - Node half (authenticated `/api/dsh-editor/*` routes: read/save text files, serve vendored CM6)
+  - `packages/dsh-editor/lib/client.js` - browser half (single file, NO build step); registers the Editor tab into the dsh-files dock
+  - `packages/dsh-editor/lib/vendor/cm6.min.js` - GENERATED vendored CodeMirror 6 (rebuilt from `vendor/`, never hand-edited)
+  - `packages/dsh-editor/cordis.patch.yml` - bundle layer (inserts the `editor` row)
 - `scripts/install-all.ps1` / `uninstall-all.ps1` (+ `.bat`, plus root
   `install.bat` / `uninstall.bat`)
 - `.dsh-version.json` - the pinned dsh version and per-package versions

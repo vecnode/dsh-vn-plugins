@@ -14,7 +14,8 @@ uninstall are clean on both targets and nothing patches core Harness files.
 
 | Package | What it does | Status |
 |---|---|---|
-| [`packages/dsh-files`](packages/dsh-files) | **Files** — a right-hand panel dock next to the chat (never overlapping it), opened with a **"Files" trigger** in the session header beside the "Session log" capsule. Claude-style tab strip with a close-x per panel, Claude-Code-style search + refresh toolbar, and the current conversation's folder as an inline tree (dotfiles on by default with a footer toggle). No collapsed rail: the panel is expanded or gone. | alpha `0.1.0-alpha.11` |
+| [`packages/dsh-files`](packages/dsh-files) | **Files** — a right-hand panel dock next to the chat (never overlapping it), opened with a **"Files" trigger** in the session header beside the "Session log" capsule. Claude-style tab strip with a close-x per panel, Claude-Code-style search + refresh toolbar, and the current conversation's folder as an inline tree (dotfiles on by default with a footer toggle). No collapsed rail: the panel is expanded or gone. | alpha `0.1.0-alpha.12` |
+| [`packages/dsh-editor`](packages/dsh-editor) | **Editor** — a second tab in the Files dock: opens **text files** from the Files tree (double-click a file row), edits them with a vendored **CodeMirror 6** engine, and saves them back to disk over an authenticated plugin route (find-in-file toolbar + **Save**, no refresh). "Editor" trigger sits right of "Files". | alpha `0.1.0-alpha.1` |
 
 ## Install (Windows)
 
@@ -58,7 +59,11 @@ dsh-files ships is reverted automatically.
   adapt the plugins (see `docs/COMPATIBILITY.md`).
 - **Language**: the UI halves are intentionally **plain JavaScript**, no build
   step — core client packages ship hand-written module-table bundles and the
-  edit→restart loop stays instant. See `packages/dsh-files/README.md`.
+  edit→restart loop stays instant. The one exception is `dsh-editor`'s
+  **vendored CodeMirror 6** artifact (`lib/vendor/cm6.min.js`), a generated
+  classic bundle rebuilt only when the CM6 version set changes (see
+  `packages/dsh-editor/README.md`); the plugin's own client code stays
+  hand-written.
 - **Iterating on a change**: double-clicking `install.bat` (or `install.bat
   -Target cli|desktop`) now **re-syncs every bundle whose version in this repo
   changed** — bump `package.json` + `.dsh-version.json`, then a plain
