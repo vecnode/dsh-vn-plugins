@@ -1,15 +1,18 @@
 # scripts/checks
 
 Standalone verification for the pack's JavaScript halves. Neither script needs a
-running harness and neither is part of `install.bat`; run them after touching a
+running harness and neither is part of the installers; run them after touching a
 client bundle or a Node route (they caught a real "the tab body never got the
-hook it needs" bug during the alpha.4 editor work).
+hook it needs" bug during the alpha.4 editor work). Node only - identical on
+Windows, macOS and Linux.
 
-```powershell
+```sh
 node scripts/checks/check-client-bundles.mjs   # module table + real React render
 node scripts/checks/check-node-routes.mjs      # editor routes + open-in-app route
-$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-routes.mjs   # also opens a real file browser
+DSH_CHECK_LAUNCH=1 node scripts/checks/check-node-routes.mjs   # also opens a real file browser
 ```
+
+(Windows PowerShell: `$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-routes.mjs`.)
 
 - `check-client-bundles.mjs` loads `packages/dsh-modal/lib/client.js`,
   `packages/dsh-editor/lib/client.js` and `packages/dsh-open-in-app/lib/client.js`

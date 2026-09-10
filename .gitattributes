@@ -1,0 +1,14 @@
+# Line endings the tooling depends on.
+#
+# A CRLF shebang breaks `./install.sh` on macOS/Linux, so shell scripts are
+# pinned to LF no matter which OS checks the repo out.
+*.sh text eol=lf
+
+# Batch files are the Windows launchers; CRLF is what cmd.exe expects.
+*.bat text eol=crlf
+
+# The forked browser bundles are GENERATED and byte-compared by
+# scripts/sync-vendored.ps1 (-Check hashes the working copy). With git's
+# autocrlf the Windows checkout would rewrite them to CRLF and report phantom
+# drift, so they are pinned to LF too.
+packages/*/lib/client.js text eol=lf

@@ -18,18 +18,21 @@ import path from 'node:path'
 
 const repo = path.resolve(fileURLToPath(new URL('../../', import.meta.url)))
 
-/** A React + react-dom pair to render with: the profile's, else any npx cache's. */
+/** A React + react-dom pair to render with: the profile's, else any npm cache's. */
 function loadReact() {
-  const roots = []
   const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
-  roots.push(path.join(home, 'profiles', 'node_modules'))
+  const roots = [path.join(home, 'profiles', 'node_modules')]
+  // npm's on-demand cache: the Local/AppData folders on Windows, ~/.npm/_npx
+  // on macOS/Linux. Global installs are the other place a pair can live.
   const caches = [process.env.LOCALAPPDATA, process.env.APPDATA]
     .filter(Boolean)
     .map((base) => path.join(base, 'npm-cache', '_npx'))
+  caches.push(path.join(os.homedir(), '.npm', '_npx'))
   for (const cache of caches) {
     if (!existsSync(cache)) continue
     for (const entry of readdirSync(cache)) roots.push(path.join(cache, entry, 'node_modules'))
   }
+  roots.push('/usr/local/lib/node_modules', '/usr/lib/node_modules')
   for (const root of roots) {
     try {
       const requireFrom = createRequire(path.join(root, 'index.js'))
@@ -42,7 +45,7 @@ function loadReact() {
       /* try the next root */
     }
   }
-  throw new Error('no react + react-dom pair found (looked in the profile and the npx caches)')
+  throw new Error('no react + react-dom pair found (looked in the profile and the npm caches)')
 }
 
 const { React, jsxRuntime, renderToStaticMarkup } = loadReact()

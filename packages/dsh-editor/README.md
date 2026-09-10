@@ -110,20 +110,24 @@ load order.
 
 ### Regenerating the vendored CodeMirror bundle
 
-Only needed when the CM6 version set changes (not for plugin code edits):
+Only needed when the CM6 version set changes (not for plugin code edits). The
+build runs anywhere Node does; only the last line's output path differs per OS:
 
-```powershell
+```sh
 cd packages/dsh-editor/vendor
 npm install
-npx --yes esbuild entry.js --bundle --minify --format=iife --global-name=DSHEditorCM `
-  --target=es2020 --outfile=..\lib\vendor\cm6.min.js
+npx --yes esbuild entry.js --bundle --minify --format=iife --global-name=DSHEditorCM \
+  --target=es2020 --outfile=../lib/vendor/cm6.min.js
 ```
+
+(On Windows use `..\lib\vendor\cm6.min.js` in the last argument.)
 
 `lib/client.js` itself stays hand-written — no build step for normal edits.
 
 ## Install / uninstall
 
-Repo `install.bat` / `uninstall.bat` auto-discover this package (it is a
-standard `dsh.bundle`); nothing else changes. After a version bump, a plain
-`install.bat` re-adds it; the web profile gets it as a live link, so code edits
-just need a restart of `npx @deepseek-ai/dsh web` plus a hard refresh.
+The repo launcher (`install.bat` on Windows, `./install.sh` on macOS/Linux)
+auto-discovers this package — it is a standard `dsh.bundle` — and so does the
+uninstaller; nothing else changes. After a version bump, a plain launcher run
+re-adds it; the web profile gets it as a live link, so code edits just need a
+restart of `npx @deepseek-ai/dsh web` plus a hard refresh.

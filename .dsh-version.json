@@ -2,6 +2,8 @@
   "comment": "The DeepSeek Harness version line this plugin pack is built and tested against. Plugins are shipped as alpha until the owner promotes them to stable. The installer pins this exact dsh version when driving the CLI. 'vendoredFrom' records the harness line whose client bundles dsh-rightbar / dsh-rightbar-files / dsh-open-in-app were forked from.",
   "dsh": "0.1.5-rc.1",
   "vendoredFrom": "0.1.5-rc.1",
+  "platforms": ["win32", "darwin", "linux"],
+  "comment_platforms": "The plugins are plain JavaScript and platform-neutral; the only OS-specific code is dsh-open-in-app's file-browser launcher (explorer.exe / open / xdg-open, WSL-aware). The launchers run on Windows (install.bat, PowerShell 5.1 or 7) and on macOS/Linux (install.sh, PowerShell 7+).",
   "packages": {
     "dsh-rightbar": {
       "version": "0.1.0-alpha.1",

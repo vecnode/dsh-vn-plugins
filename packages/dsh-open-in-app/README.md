@@ -65,15 +65,19 @@ holds the fork's patch list (the pack route constant, the file-manager id set,
 and the one line of `launch()` that chooses between the two routes) and fails
 loudly when a harness bump moves the code it patches. Re-sync after a pin bump:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sync-vendored.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sync-vendored.ps1 -Check
+```sh
+pwsh -NoProfile -File scripts/sync-vendored.ps1
+pwsh -NoProfile -File scripts/sync-vendored.ps1 -Check
 ```
+
+(Windows accepts the same commands through `powershell`; the script itself is
+OS-neutral.)
 
 ## Install / uninstall
 
-Repo `install.bat` auto-discovers this package (it is a standard `dsh.bundle`).
-Adding a package changes the profile's bundle set, so the first install after
-this package appeared needs `install.bat -Force`; after that a plain `install.bat`
-is enough. Removing it with `uninstall.bat` also removes its patch layer, which
-brings the shipped client row back on the next restart.
+The repo launcher (`install.bat` on Windows, `./install.sh` on macOS/Linux)
+auto-discovers this package - it is a standard `dsh.bundle`. Adding a package
+changes the profile's bundle set, so the first install after this package
+appeared needs `-Force`; after that a plain run is enough. Removing it with the
+uninstaller also removes its patch layer, which brings the shipped client row
+back on the next restart.

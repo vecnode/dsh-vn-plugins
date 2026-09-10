@@ -9,8 +9,10 @@ The pack targets the harness line DeepSeek ships to the raw web install
 |---|---|
 | `@deepseek-ai/dsh` | `0.1.5-rc.1` |
 | Forked from | the same `0.1.5-rc.1` line (`.dsh-version.json`'s `vendoredFrom`) |
-| Install target | the web profile only (`$DSH_HOME\profiles\web`) |
+| Install target | the web profile only (`$DSH_HOME/profiles/web`) |
+| Host platforms | Windows (PowerShell 5.1 or 7), macOS and Linux (PowerShell 7); the plugins themselves are plain JS and the only OS-specific code is the file-browser launcher |
 | Right bar | **owned by the pack** - `dsh-rightbar` / `dsh-rightbar-files` are forks of `@deepseek-ai/dsh-client-ui-sidebar-right` / `-sidebar-files`, and the core rows `ui-sidebar-right` / `ui-sidebar-files` are disabled |
+| Open In file managers | **owned by the pack** - `dsh-open-in-app` forks `@deepseek-ai/dsh-client-ui-open-in-app` (row `ui-open-in-app` disabled) and launches the OS file browser directly |
 
 ## What this means for the plugin
 
@@ -30,9 +32,14 @@ The pack targets the harness line DeepSeek ships to the raw web install
   - a `guide` entry, which is what the tab strip's "+" control lists.
 - The workspace tree it opens files from is the pack's Files tab over
   `remote.workspaceFiles` (a shipped host service, not a UI dependency). That
-  Remote is read-only, so saving goes through the plugin's own authenticated
-  route; the session's workspace root is resolved host-side from the live
-  session header or session persistence.
+  Remote is read-only, so saving (and creating a new file from a blank editor
+  tab) goes through the plugin's own authenticated route; the session's
+  workspace root is resolved host-side from the live session header or session
+  persistence.
+- **dsh-modal** provides the shared `modals` client service the editor's save-as
+  dialog uses. It owns no slot and no ordering edge, and the editor resolves it
+  lazily (falling back to the browser's own prompt), so neither plugin requires
+  the other to be installed.
 - The shipped `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` row stays
   enabled: it only consumes `sidebarRightTabs` and the keyed seat, so the
   Markdown/code/image/PDF previews keep working inside the pack's bar. The
@@ -42,10 +49,12 @@ The pack targets the harness line DeepSeek ships to the raw web install
 ## Upgrading the pack when DSH moves
 
 1. Bump `dsh` in `.dsh-version.json` (and each package's tested note).
-2. Re-run `install.bat -Force` to re-add bundles under the new CLI pin.
-3. If a core API moved (registry shape, seat names, framework props, route
+2. Re-run `scripts/sync-vendored.ps1` (then review the diff: a patched fork's
+   patch list fails loudly when the core code it patches moved).
+3. Re-run the installer with `-Force` to re-add bundles under the new CLI pin.
+4. If a core API moved (registry shape, seat names, framework props, route
    registration), adapt the affected package and bump its alpha version.
-4. Re-run `uninstall.bat` on machines that should drop the old version first.
+5. Re-run the uninstaller on machines that should drop the old version first.
 
 ## Renames, retirements and forks within the pack
 
@@ -60,11 +69,20 @@ The pack targets the harness line DeepSeek ships to the raw web install
   `dsh-rightbar-files` are byte-for-byte forks of the shipped
   `@deepseek-ai/dsh-client-ui-sidebar-right` / `-sidebar-files` bundles, and the
   master's bundle layer hard-disables the two core rows so only the pack's
-  copies run. Re-sync the fork with `scripts\sync-vendored.ps1` after a
+  copies run. Re-sync the fork with `scripts/sync-vendored.ps1` after a
   harness-line bump (see `ARCHITECTURE.md` §4).
+- **editor alpha.4 / modal alpha.1 / open-in-app alpha.1**: the editor starts
+  blank documents and names new files through the new shared `modals` dialog;
+  the Open In file-manager entries moved to the pack's own cross-platform
+  launcher, so `ui-open-in-app` is disabled and `native-open-in-app` runs
+  instead.
+- **os-neutral alpha**: no version bumps - the launchers gained macOS/Linux
+  twins (`install.sh` / `uninstall.sh`, `scripts/*.sh`) and the PowerShell
+  scripts stopped assuming Windows; installed profiles are unaffected.
 
   Installers prune both retired bundle names; upgrade by re-running
-  `install.bat`, then restart the app and hard-refresh the browser.
+  `install.bat` / `./install.sh`, then restart the app and hard-refresh the
+  browser.
 
 ## Alpha policy
 

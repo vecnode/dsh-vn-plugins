@@ -55,16 +55,21 @@ pack's own tab types on top of this bar.
 
 When the pinned harness line moves:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sync-vendored.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sync-vendored.ps1 -Check
+```sh
+pwsh -NoProfile -File scripts/sync-vendored.ps1
+pwsh -NoProfile -File scripts/sync-vendored.ps1 -Check
 ```
 
-The script finds the harness `node_modules` (profile first, then the npx
-cache), copies each forked bundle, rewrites the module id, stamps the banner and
-prints hashes. `-Check` reports drift without writing (exit 1 when out of
-sync). If the bar's slot/service surface changed in the new line, review the
-diff before installing — a fork does not silently track upstream.
+(On Windows, `powershell -NoProfile -ExecutionPolicy Bypass -File
+scripts\sync-vendored.ps1` works just as well: the script is OS-neutral.)
+
+The script finds the harness `node_modules` (profile first, then the npm caches
+- the Windows npm cache, `~/.npm/_npx`, and the POSIX global module
+directories), copies each forked bundle, rewrites the module id, applies that
+fork's patch list, stamps the banner and prints hashes. `-Check` reports drift
+without writing (exit 1 when out of sync). If the bar's slot/service surface
+changed in the new line, review the diff before installing — a fork does not
+silently track upstream.
 
 ## Layout
 

@@ -2,17 +2,22 @@
 <#
 .SYNOPSIS
     Installs the dsh-vn-plugins bundle set into the DeepSeek Harness web profile
-    on this Windows machine.
+    on this machine (Windows, macOS, or Linux).
 
 .DESCRIPTION
     One target only: the raw CLI/web install used by "npx @deepseek-ai/dsh web"
-    (DSH_HOME or %USERPROFILE%\.dsh, profile "web" by default). DSH Desktop is
+    (DSH_HOME, else ~/.dsh, profile "web" by default). DSH Desktop is
     deliberately NOT supported by this pack: the desktop app runs its own frozen
     generation snapshot and is no longer installed into.
 
+    Runs on Windows PowerShell 5.1 and on PowerShell 7+ (pwsh). The launchers are
+    install.bat (Windows) and install.sh (macOS/Linux); every path, executable
+    name and the PATH separator is resolved per platform, so nothing here assumes
+    Windows.
+
     pnpm handling: the harness profile stores its pnpm layout in
-    node_modules\.modules.yaml. The matching local pnpm major is bootstrapped
-    under .\tools and invoked with the profile's own virtual-store settings.
+    node_modules/.modules.yaml. The matching local pnpm major is bootstrapped
+    under ./tools and invoked with the profile's own virtual-store settings.
 
 .PARAMETER Target
     Kept for muscle memory: web | cli (both mean the same web profile).
@@ -21,7 +26,7 @@
     Only install bundles whose package name matches this substring.
 
 .PARAMETER DshHome
-    Override the DSH_HOME (default: $env:DSH_HOME or %USERPROFILE%\.dsh).
+    Override the DSH_HOME (default: $env:DSH_HOME, else ~/.dsh).
 
 .PARAMETER ProfileName
     Override the profile name (default: web).
@@ -35,7 +40,7 @@
 .EXAMPLE
     .\install-all.ps1
 .EXAMPLE
-    .\install-all.ps1 -ProfileName web -Verbose
+    pwsh -NoProfile -File scripts/install-all.ps1 -Force     # macOS / Linux
 #>
 [CmdletBinding()]
 param(
@@ -50,6 +55,60 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+
+# ---------------------------------------------------------------------------
+# Platform facts. Windows PowerShell 5.1 HAS no $IsWindows/$IsMacOS/$IsLinux
+# (it exists only on Windows), so the automatic variables are read defensively:
+# the desktop edition is the reliable signal for 5.1.
+# ---------------------------------------------------------------------------
+$script:Platform = 'linux'
+if ($PSVersionTable.PSEdition -ne 'Core') { $script:Platform = 'windows' }
+elseif ($IsWindows) { $script:Platform = 'windows' }
+elseif ($IsMacOS) { $script:Platform = 'macos' }
+
+$script:IsWindowsHost = $script:Platform -eq 'windows'
+# ';' on Windows, ':' on macOS/Linux.
+$script:PathListSeparator = [System.IO.Path]::PathSeparator
+# '\' on Windows, '/' on macOS/Linux.
+$script:DirSeparator = [System.IO.Path]::DirectorySeparatorChar
+
+<#
+    The user's home directory without assuming Windows: HOME is what macOS/Linux
+    (and pwsh on Windows) set, USERPROFILE is the Windows fallback, and the
+    profile-folder API is the last resort on Windows.
+#>
+function Get-HomeDir {
+    if ($env:HOME) { return $env:HOME }
+    if ($env:USERPROFILE) { return $env:USERPROFILE }
+    return [Environment]::GetFolderPath('UserProfile')
+}
+
+<#
+    Resolve the first existing command from an ordered name list. Callers pass
+    the platform's spellings (npx.cmd before npx on Windows; bare names
+    elsewhere), so no call site has to know which OS it runs on.
+#>
+function Get-ToolPath {
+    param([string[]]$Names)
+    foreach ($name in $Names) {
+        $found = Get-Command $name -ErrorAction SilentlyContinue
+        if ($found) { return $found.Source }
+    }
+    return $null
+}
+
+# The command names one tool goes by on this platform.
+function Get-ToolNames {
+    param([string]$Name)
+    if ($script:IsWindowsHost) { return @("$Name.cmd", "$Name.exe", $Name) }
+    return @($Name)
+}
+
+# The pnpm executable the local bootstrap drops into node_modules/.bin.
+function Get-PnpmBinName {
+    if ($script:IsWindowsHost) { return 'pnpm.cmd' }
+    return 'pnpm'
+}
 
 function Write-Step($msg) { Write-Host "[dsh-vn-plugins] $msg" -ForegroundColor Cyan }
 
@@ -90,7 +149,7 @@ function Get-Packages {
 }
 
 function Assert-Tool($name) {
-    if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+    if (-not (Get-ToolPath -Names (Get-ToolNames -Name $name))) {
         throw "Required tool '$name' was not found on PATH. Install Node.js >= 22 first (https://nodejs.org)."
     }
 }
@@ -99,11 +158,11 @@ function Assert-Tool($name) {
 # pnpm helpers
 # ---------------------------------------------------------------------------
 function Get-PnpmStoreInfo {
-    # Reads node_modules\.modules.yaml for the pnpm major (store vN) and the
+    # Reads node_modules/.modules.yaml for the pnpm major (store vN) and the
     # virtual-store-dir-max-length the profile was created with.
     param([string]$ProfileDir)
     $info = @{ Major = 9; MaxLength = $null }
-    $yaml = Join-Path $ProfileDir 'node_modules\.modules.yaml'
+    $yaml = Join-Path (Join-Path $ProfileDir 'node_modules') '.modules.yaml'
     if (-not (Test-Path $yaml)) { return $info }
     $text = Get-Content $yaml -Raw -ErrorAction SilentlyContinue
     if (-not $text) { return $info }
@@ -118,27 +177,26 @@ function Get-PnpmStoreInfo {
 }
 
 function Ensure-PnpmForMajor {
-    # Bootstraps a local pnpm of the requested major under .\tools (no admin).
+    # Bootstraps a local pnpm of the requested major under ./tools (no admin).
     param([int]$Major)
-    $existing = Get-Command pnpm -ErrorAction SilentlyContinue
+    $existing = Get-ToolPath -Names (Get-ToolNames -Name 'pnpm')
     if ($existing) {
         # System pnpm is fine when it is new enough for the requested major.
-        $vText = (& $existing.Source --version 2>$null)
+        $vText = (& $existing --version 2>$null)
         $v = 0
         if ($vText -and [int]::TryParse(($vText -split '\.')[0], [ref]$v) -and $v -ge $Major) {
-            return Split-Path $existing.Source
+            return Split-Path $existing
         }
     }
-    $prefix = Join-Path $repoRoot ("tools\pnpm" + $Major)
-    $binDir = Join-Path $prefix 'node_modules\.bin'
-    $local = Join-Path $binDir 'pnpm.cmd'
+    $prefix = Join-Path (Join-Path $repoRoot 'tools') ('pnpm' + $Major)
+    $binDir = Join-Path (Join-Path $prefix 'node_modules') '.bin'
+    $local = Join-Path $binDir (Get-PnpmBinName)
     if (-not (Test-Path $local)) {
-        Write-Step "Bootstrapping local pnpm@$Major under .\tools (no admin needed)..."
-        $npmCmd = Get-Command npm.cmd -ErrorAction SilentlyContinue
-        if (-not $npmCmd) { $npmCmd = Get-Command npm -ErrorAction SilentlyContinue }
-        if (-not $npmCmd) { throw 'npm was not found (install Node.js first).' }
-        & $npmCmd.Source install --prefix $prefix "pnpm@$Major" --no-audit --no-fund 2>&1 | Out-Host
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $local)) { throw "Failed to bootstrap pnpm@$Major into .\tools." }
+        Write-Step "Bootstrapping local pnpm@$Major under ./tools (no admin needed)..."
+        $npm = Get-ToolPath -Names (Get-ToolNames -Name 'npm')
+        if (-not $npm) { throw 'npm was not found (install Node.js first).' }
+        & $npm install --prefix $prefix "pnpm@$Major" --no-audit --no-fund 2>&1 | Out-Host
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $local)) { throw "Failed to bootstrap pnpm@$Major into ./tools." }
     }
     return $binDir
 }
@@ -149,10 +207,10 @@ function Ensure-PnpmForMajor {
 function Resolve-WebTarget {
     param([string]$HomeDir, [string]$Profile)
     if (-not $HomeDir) {
-        $HomeDir = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
+        $HomeDir = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path (Get-HomeDir) '.dsh' }
     }
     if (-not $Profile) { $Profile = 'web' }
-    $profileDir = Join-Path $HomeDir "profiles\$Profile"
+    $profileDir = Join-Path (Join-Path $HomeDir 'profiles') $Profile
     return [pscustomobject]@{
         Label      = 'web'
         DshHome    = $HomeDir
@@ -165,10 +223,9 @@ function Resolve-WebTarget {
 # dsh invocation
 # ---------------------------------------------------------------------------
 function Get-DshInvoker {
-    $npx = Get-Command npx.cmd -ErrorAction SilentlyContinue
-    if (-not $npx) { $npx = Get-Command npx -ErrorAction SilentlyContinue }
+    $npx = Get-ToolPath -Names (Get-ToolNames -Name 'npx')
     if (-not $npx) { throw 'npx was not found (is Node.js installed?).' }
-    return $npx.Source
+    return $npx
 }
 
 function Invoke-Dsh {
@@ -186,7 +243,7 @@ function Invoke-Dsh {
     # a bare `add` there unless the root-check is opted out.
     $oldRootCheck = $env:npm_config_ignore_workspace_root_check
 
-    $env:PATH = $pnpmBin + ';' + $oldPath
+    $env:PATH = $pnpmBin + $script:PathListSeparator + $oldPath
     $env:DSH_HOME = $DshHome
     if ($storeInfo.MaxLength) { $env:npm_config_virtual_store_dir_max_length = $storeInfo.MaxLength }
     $env:npm_config_ignore_workspace_root_check = 'true'
@@ -260,9 +317,13 @@ function Test-LiveLink {
         if ($item.LinkType) {
             try { $resolved = $item.Target } catch { $resolved = $item.FullName }
         }
-        $root = [System.IO.Path]::GetFullPath($RepoPackagesRoot).TrimEnd('\')
-        $check = [System.IO.Path]::GetFullPath($resolved).TrimEnd('\')
-        return ($check -eq $root) -or $check.StartsWith($root + '\', [System.StringComparison]::OrdinalIgnoreCase)
+        $root = [System.IO.Path]::GetFullPath($RepoPackagesRoot).TrimEnd($script:DirSeparator)
+        $check = [System.IO.Path]::GetFullPath($resolved).TrimEnd($script:DirSeparator)
+        # Windows compares paths case-insensitively; macOS/Linux must not.
+        if ($script:IsWindowsHost) {
+            return ($check -ieq $root) -or $check.StartsWith($root + $script:DirSeparator, [System.StringComparison]::OrdinalIgnoreCase)
+        }
+        return ($check -ceq $root) -or $check.StartsWith($root + $script:DirSeparator, [System.StringComparison]::Ordinal)
     }
     catch {
         return $false
@@ -323,6 +384,7 @@ function Install-To-Profile {
 # ---------------------------------------------------------------------------
 
 Write-Step 'DeepSeek Harness plugin pack installer (web profile)'
+Write-Step "Platform: $script:Platform (PowerShell $($PSVersionTable.PSVersion))"
 Write-Step "Repo: $repoRoot"
 
 $DshVersion = if ($DshVersion) { $DshVersion } else { Get-DshPin }

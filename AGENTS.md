@@ -4,11 +4,10 @@ This file is the quick-start brief. Read `ARCHITECTURE.md` for the deep dive.
 
 ## What this repo is
 
-Personal plugin pack for DeepSeek Harness (Windows). It installs into ONE place
-only:
+Personal plugin pack for DeepSeek Harness. It installs into ONE place only:
 
 - the web profile: `npx @deepseek-ai/dsh web` (profile `web` under `DSH_HOME`,
-  default `%USERPROFILE%\.dsh`)
+  default `~/.dsh`)
 
 DSH Desktop support was removed on purpose - the desktop app runs its own frozen
 generation snapshot and this pack targets the raw web install alone. Do not add
@@ -17,6 +16,17 @@ desktop detection, a `-Target desktop` switch, or desktop install steps back.
 Everything is a standard dsh **bundle**: an npm package with
 `dsh.bundle` (+ `cordis.patch.yml`) and, for UI plugins, `dsh.client` and an
 `exports["./client"]` browser bundle. Nothing patches DeepSeek core files.
+
+**Platforms.** The plugins are plain JavaScript and must stay OS-neutral; the
+only per-OS code allowed is a launcher choosing the right command for the host
+(see `packages/dsh-open-in-app`). The tooling is PowerShell that runs on Windows
+PowerShell 5.1 *and* PowerShell 7 (`pwsh`) on macOS/Linux: use `Join-Path`,
+`[System.IO.Path]::PathSeparator` / `DirectorySeparatorChar`, `$PSVersionTable`
+(never `$IsWindows` unguarded - 5.1 has no such variable), and the
+`Get-ToolPath` / `Get-ToolNames` helpers instead of hardcoding `npx.cmd`,
+`npm.cmd`, `powershell.exe`, `%USERPROFILE%` or `\` separators. Entry points come
+in pairs: `install.bat` / `install.sh`, `uninstall.bat` / `uninstall.sh`, plus
+the thin `scripts/*.bat` / `scripts/*.sh` twins.
 
 ## Layout
 
@@ -29,8 +39,9 @@ Everything is a standard dsh **bundle**: an npm package with
   - `packages/dsh-modal/` - the pack's shared dialog surface: `lib/client.js` mounts one body-level overlay on `document.body` (`react-dom/client` `createRoot`) and provides the client service **`modals`** (`open`/`alert`/`confirm`/`prompt`, async `submit` work with inline errors). No slot, no ordering edge; consumers use `ctx.get('modals')`
   - `packages/dsh-open-in-app/` - PATCHED fork of `@deepseek-ai/dsh-client-ui-open-in-app` (the Session header's "Open In..." button) whose file-manager ids post to a Node half that opens the OS file browser directly (`explorer.exe` / `open` / `xdg-open`, WSL-aware) instead of the shipped shell-open verb. The patch list is data in `scripts/sync-vendored.ps1`; its `cordis.patch.yml` disables `ui-open-in-app` and inserts `native-open-in-app`. The shipped HOST row (`open-in-app`) stays mounted for editors/terminals
   - each package's `cordis.patch.yml` - its bundle layer (rows, plus the master's disables)
-- `scripts/install-all.ps1` / `uninstall-all.ps1` (+ `.bat`, plus root
-  `install.bat` / `uninstall.bat`)
+- `scripts/install-all.ps1` / `uninstall-all.ps1` (OS-neutral PowerShell) with
+  their `.bat` (Windows) and `.sh` (macOS/Linux) twins, plus the root
+  `install.bat` / `install.sh` and `uninstall.bat` / `uninstall.sh` launchers
 - `scripts/sync-vendored.ps1` - moves the forks forward after a harness-line bump
   (copies the core bundles, rewrites the module ids, applies each fork's patch
   list, stamps the banner; `-Check` reports drift without writing)
@@ -51,7 +62,7 @@ Everything is a standard dsh **bundle**: an npm package with
 
 1. Target the pinned dsh line only (`0.1.5-rc.1`, see `.dsh-version.json`).
    Test against what the owner runs. When DSH publishes a new line, bump the
-   pin, run `scripts\sync-vendored.ps1` (the right bar, the Files tab and the
+   pin, run `scripts/sync-vendored.ps1` (the right bar, the Files tab and the
    open-in-app client are **forks** of that line's bundles), then adapt - do not
    silently chase master APIs.
 2. Plugins stay **alpha** (`-alpha.N`) until the owner says "make it stable".
@@ -62,10 +73,10 @@ Everything is a standard dsh **bundle**: an npm package with
 4. The browser bundle is read at harness boot. The web profile installs every
    bundle as a live link into this repo, so after editing a `client.js`
    the app only needs a RESTART of `npx @deepseek-ai/dsh web` plus a hard
-   browser refresh (Ctrl+F5) - no reinstall. Reinstall (`install.bat`, which
-   re-adds on version change, or `-Force`) is only needed when the package set
-   or version changes. There is no HMR unless a `pnpm run dev:web` watcher from
-   the harness repo is running.
+   browser refresh (Ctrl+F5) - no reinstall. Reinstall (a plain
+   `install.bat` / `./install.sh`, which re-adds on version change, or `-Force`)
+   is only needed when the package set or version changes. There is no HMR
+   unless a `pnpm run dev:web` watcher from the harness repo is running.
 5. Client bundles are module-table files:
    `window.__ModuleLoader__.load({ id, factory })`. Browser-only: no Node
    imports; you may `require("react")`; the shell statically seeds `react`,
@@ -83,9 +94,10 @@ Everything is a standard dsh **bundle**: an npm package with
    `ctx.slots.inject("sidebar.right.pane.tab"...)` with `key` = the
    definition's `id`; the "+" control lists every type that declares a `guide`
    entry on its definition.
-6. Installer scripts are Windows PowerShell 5.1-compatible AND ASCII-only
-   (smart quotes/dashes have broken parsing before). After editing a `.ps1`,
-   run a parser check (see below).
+6. Installer scripts are ASCII-only (smart quotes/dashes have broken parsing
+   before) and must run on **Windows PowerShell 5.1 AND PowerShell 7+ on
+   macOS/Linux** - see the Platforms note above. After editing a `.ps1`, run a
+   parser check (see below).
 7. When the pack branding is mentioned, the repo name is `dsh-vn-plugins`.
    Commits are authored as `vecnode <vecnode@users.noreply.github.com>`
    (git config is set in the repo).
@@ -93,15 +105,26 @@ Everything is a standard dsh **bundle**: an npm package with
 ## Commands
 
 ```bat
+:: Windows
 install.bat                   :: installs into the web profile (the only target)
 install.bat -Force            :: re-add bundles even when versions match
 uninstall.bat
 ```
 
+```sh
+# macOS / Linux (needs PowerShell 7: https://aka.ms/powershell)
+./install.sh                  # the web profile (the only target)
+./install.sh -Force           # re-add bundles even when versions match
+./uninstall.sh
+```
+
+Both launchers just call the same OS-neutral script, so `pwsh -NoProfile -File
+scripts/install-all.ps1 -Force` works everywhere too.
+
 `-Target cli` is accepted as an alias for the web profile; there is no desktop
 target any more. Everything runs through `npx --yes @deepseek-ai/dsh@<pinned>`;
-pnpm is bootstrapped locally under `tools\pnpm<major>` (the profile's pnpm major
-is read from `node_modules\.modules.yaml`).
+pnpm is bootstrapped locally under `tools/pnpm<major>` (the profile's pnpm major
+is read from `node_modules/.modules.yaml`).
 
 > Package retirements: the panel was `dsh-focus` (row `focus`) until alpha.10,
 > when it became `dsh-files` (row `files`), and in alpha.2 of the editor the
@@ -122,22 +145,24 @@ node --check packages/dsh-rightbar/lib/index.js    # forked client.js is generat
 $t=$null;$e=$null; [System.Management.Automation.Language.Parser]::ParseFile(
   'scripts/install-all.ps1',[ref]$t,[ref]$e); $e.Count   # expect 0
 
-# 2. after a harness-line bump, move the fork forward (then review the diff)
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-vendored.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-vendored.ps1 -Check
+# 2. after a harness-line bump, move the forks forward (then review the diff).
+#    On Windows use `powershell -NoProfile -ExecutionPolicy Bypass -File`;
+#    on macOS/Linux use `pwsh -NoProfile -File`.
+pwsh -NoProfile -File scripts/sync-vendored.ps1
+pwsh -NoProfile -File scripts/sync-vendored.ps1 -Check
 
 # 3. push the bundles into the web profile
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-all.ps1 -Force
+pwsh -NoProfile -File scripts/install-all.ps1 -Force
 
 # 4. verify the served bundle really contains the change (optional smoke):
-$env:DSH_HOME = "$env:USERPROFILE\.dsh"
+$env:DSH_HOME = "$HOME/.dsh"          # Windows: "$env:USERPROFILE\.dsh"
 npx --yes @deepseek-ai/dsh@0.1.5-rc.1 web --no-open --port 3099   # background
 # then GET http://127.0.0.1:3099/?token=<token-from-log>, and confirm the boot
 # HTML lists dsh-rightbar / dsh-rightbar-files / dsh-editor / dsh-modal /
 # dsh-open-in-app client.js and does NOT list the disabled core rows
 # (@deepseek-ai/dsh-client-ui-sidebar-*, @deepseek-ai/dsh-client-ui-open-in-app).
 # POST /api/dsh-open-in-app/open {"app":"explorer","path":"<abs dir>"} must open
-# a real Explorer window; PUT /api/dsh-editor/file {"create":true,...} must
+# a real file-browser window; PUT /api/dsh-editor/file {"create":true,...} must
 # create the file (and answer 409 EXISTS on a second try).
 
 # 5. commit as vecnode and push

@@ -28,10 +28,16 @@
     when omitted: the profile first, then the npx cache / global installs.
 
 .PARAMETER DshHome
-    Harness home to look in first (default: $env:DSH_HOME or %USERPROFILE%\.dsh).
+    Harness home to look in first (default: $env:DSH_HOME, else ~/.dsh).
 
 .PARAMETER Check
     Report what would change without writing anything (exit 1 when out of sync).
+
+.NOTES
+    Runs on Windows PowerShell 5.1 and on PowerShell 7+ (pwsh) on Windows, macOS
+    and Linux: paths are built with Join-Path, and the candidate roots cover the
+    Windows npm cache as well as the POSIX ~/.npm/_npx and global module
+    directories.
 #>
 [CmdletBinding()]
 param(
@@ -42,6 +48,26 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+
+# ---------------------------------------------------------------------------
+# Platform facts (Windows PowerShell 5.1 has no $IsWindows/$IsMacOS/$IsLinux)
+# ---------------------------------------------------------------------------
+$script:Platform = 'linux'
+if ($PSVersionTable.PSEdition -ne 'Core') { $script:Platform = 'windows' }
+elseif ($IsWindows) { $script:Platform = 'windows' }
+elseif ($IsMacOS) { $script:Platform = 'macos' }
+$script:IsWindowsHost = $script:Platform -eq 'windows'
+
+<#
+    The user's home directory without assuming Windows: HOME is what macOS/Linux
+    (and pwsh on Windows) set, USERPROFILE is the Windows fallback, and the
+    profile-folder API is the last resort on Windows.
+#>
+function Get-HomeDir {
+    if ($env:HOME) { return $env:HOME }
+    if ($env:USERPROFILE) { return $env:USERPROFILE }
+    return [Environment]::GetFolderPath('UserProfile')
+}
 
 function Write-Step($msg) { Write-Host "[sync-vendored] $msg" -ForegroundColor Cyan }
 
@@ -107,17 +133,26 @@ function Get-CandidateRoots {
     param([string]$Explicit, [string]$HomeDir)
     $roots = @()
     if ($Explicit) { $roots += $Explicit }
-    if (-not $HomeDir) { $HomeDir = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' } }
-    $roots += (Join-Path $HomeDir 'profiles\web\node_modules')
+    if (-not $HomeDir) { $HomeDir = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path (Get-HomeDir) '.dsh' } }
+    $roots += (Join-Path (Join-Path (Join-Path $HomeDir 'profiles') 'web') 'node_modules')
+    # npm's on-demand cache lives in different places per platform: the Windows
+    # Local/AppData roaming folders, and ~/.npm/_npx on macOS/Linux.
     $caches = @()
-    if ($env:LOCALAPPDATA) { $caches += (Join-Path $env:LOCALAPPDATA 'npm-cache\_npx') }
-    if ($env:APPDATA) { $caches += (Join-Path $env:APPDATA 'npm-cache\_npx') }
+    if ($env:LOCALAPPDATA) { $caches += (Join-Path (Join-Path $env:LOCALAPPDATA 'npm-cache') '_npx') }
+    if ($env:APPDATA) { $caches += (Join-Path (Join-Path $env:APPDATA 'npm-cache') '_npx') }
+    $caches += (Join-Path (Join-Path (Get-HomeDir) '.npm') '_npx')
     foreach ($cache in $caches) {
         if (-not (Test-Path $cache)) { continue }
         $hits = Get-ChildItem $cache -Directory -ErrorAction SilentlyContinue |
             ForEach-Object { Join-Path $_.FullName 'node_modules' } |
             Where-Object { Test-Path (Join-Path $_ '@deepseek-ai') }
         foreach ($hit in $hits) { $roots += $hit }
+    }
+    # Global installs, the shape "npm i -g @deepseek-ai/dsh" leaves behind.
+    $globals = @('/usr/local/lib/node_modules', '/usr/lib/node_modules')
+    if ($env:APPDATA) { $globals += (Join-Path $env:APPDATA 'npm\node_modules') }
+    foreach ($global in $globals) {
+        if (Test-Path (Join-Path $global '@deepseek-ai')) { $roots += $global }
     }
     return ($roots | Select-Object -Unique)
 }
@@ -135,7 +170,7 @@ function Resolve-CoreModules {
         }
         if ($ok) { return $root }
     }
-    throw 'Could not find a harness node_modules carrying the core sidebar packages. Pass -CoreModules "<harness>\node_modules".'
+    throw 'Could not find a harness node_modules carrying the core sidebar packages. Pass -CoreModules "<harness>/node_modules".'
 }
 
 function Get-CorePackageDir {
@@ -156,8 +191,8 @@ Write-Step "core modules: $coreRoot"
 $outOfSync = $false
 foreach ($item in $vendored) {
     $coreDir = Get-CorePackageDir -Root $coreRoot -CoreName $item.Core
-    $sourcePath = Join-Path $coreDir 'lib\client.js'
-    $targetPath = Join-Path $repoRoot ("packages\" + $item.Name + '\lib\client.js')
+    $sourcePath = Join-Path (Join-Path $coreDir 'lib') 'client.js'
+    $targetPath = Join-Path (Join-Path (Join-Path (Join-Path $repoRoot 'packages') $item.Name) 'lib') 'client.js'
     if (-not (Test-Path $sourcePath)) { throw "missing $sourcePath" }
     if (-not (Test-Path $targetPath)) { throw "missing $targetPath (create the package first)" }
 
