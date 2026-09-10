@@ -1,37 +1,30 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs the dsh-vn-plugins bundle set into DeepSeek Harness profiles on this
-    Windows machine.
+    Installs the dsh-vn-plugins bundle set into the DeepSeek Harness web profile
+    on this Windows machine.
 
 .DESCRIPTION
-    Targets:
-      - cli     : the raw install profile used by "npx @deepseek-ai/dsh web"
-                  (DSH_HOME or %USERPROFILE%\.dsh, profile "web" by default).
-      - desktop : dsh-desktop's own harness home under its Electron user data
-                  (%APPDATA%\<app>\harness\profiles\<normal profile>).
+    One target only: the raw CLI/web install used by "npx @deepseek-ai/dsh web"
+    (DSH_HOME or %USERPROFILE%\.dsh, profile "web" by default). DSH Desktop is
+    deliberately NOT supported by this pack: the desktop app runs its own frozen
+    generation snapshot and is no longer installed into.
 
-    With -Target all (the default) a machine without dsh-desktop is fine: the
-    desktop target is skipped with a warning and the run still succeeds. Only
-    an explicit "-Target desktop" fails when no desktop profile can be found.
-
-    pnpm handling: each harness profile stores its pnpm layout in
-    node_modules\.modules.yaml. The CLI installs and dsh-desktop use different
-    pnpm majors and virtual-store-dir-max-length values, so the matching local
-    pnpm is bootstrapped under .\tools and invoked with the profile's own
-    settings.
+    pnpm handling: the harness profile stores its pnpm layout in
+    node_modules\.modules.yaml. The matching local pnpm major is bootstrapped
+    under .\tools and invoked with the profile's own virtual-store settings.
 
 .PARAMETER Target
-    Which install target(s): all | cli | desktop.
+    Kept for muscle memory: web | cli (both mean the same web profile).
 
 .PARAMETER Plugin
     Only install bundles whose package name matches this substring.
 
 .PARAMETER DshHome
-    Override the CLI DSH_HOME (default: $env:DSH_HOME or %USERPROFILE%\.dsh).
+    Override the DSH_HOME (default: $env:DSH_HOME or %USERPROFILE%\.dsh).
 
 .PARAMETER ProfileName
-    Override the profile name for the CLI target (default: web).
+    Override the profile name (default: web).
 
 .PARAMETER DshVersion
     Override the pinned dsh version from .dsh-version.json.
@@ -40,14 +33,14 @@
     Re-run "add" even for bundles already listed in the profile.
 
 .EXAMPLE
-    .\install-all.ps1 -Target all
+    .\install-all.ps1
 .EXAMPLE
-    .\install-all.ps1 -Target desktop -ProfileName desktop -Verbose
+    .\install-all.ps1 -ProfileName web -Verbose
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('all', 'cli', 'desktop')]
-    [string]$Target = 'all',
+    [ValidateSet('web', 'cli')]
+    [string]$Target = 'web',
     [string]$Plugin = '',
     [string]$DshHome = '',
     [string]$ProfileName = '',
@@ -153,7 +146,7 @@ function Ensure-PnpmForMajor {
 # ---------------------------------------------------------------------------
 # Target resolution
 # ---------------------------------------------------------------------------
-function Resolve-CliTarget {
+function Resolve-WebTarget {
     param([string]$HomeDir, [string]$Profile)
     if (-not $HomeDir) {
         $HomeDir = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
@@ -161,79 +154,11 @@ function Resolve-CliTarget {
     if (-not $Profile) { $Profile = 'web' }
     $profileDir = Join-Path $HomeDir "profiles\$Profile"
     return [pscustomobject]@{
-        Label      = 'cli'
+        Label      = 'web'
         DshHome    = $HomeDir
         Profile    = $Profile
         ProfileDir = $profileDir
     }
-}
-
-<#
-    Find dsh-desktop harness profiles. AllowMissing controls the failure mode:
-      - AllowMissing:false  -> throws when nothing/ambiguous is found
-                                (used when desktop was explicitly requested).
-      - AllowMissing:true   -> returns @() when nothing/ambiguous is found
-                                (used by -Target all; the caller warns + skips).
-#>
-function Resolve-DesktopTargets {
-    param([string]$HomeDir, [string]$Profile, [switch]$AllowMissing)
-
-    $candidateHomes = @()
-    if ($HomeDir) {
-        $candidateHomes += $HomeDir
-    }
-    else {
-        foreach ($root in @($env:APPDATA, $env:LOCALAPPDATA)) {
-            if (-not $root -or -not (Test-Path $root)) { continue }
-            foreach ($dir in (Get-ChildItem $root -Directory -ErrorAction SilentlyContinue)) {
-                $harness = Join-Path $dir.FullName 'harness'
-                if (Test-Path (Join-Path $harness 'profiles')) { $candidateHomes += $harness }
-            }
-        }
-    }
-
-    $hits = @()
-    foreach ($candidate in ($candidateHomes | Select-Object -Unique)) {
-        $profilesRoot = Join-Path $candidate 'profiles'
-        if (-not (Test-Path $profilesRoot)) { continue }
-        foreach ($pdir in (Get-ChildItem $profilesRoot -Directory -ErrorAction SilentlyContinue)) {
-            if ($pdir.Name -eq 'node_modules' -or $pdir.Name -match 'safe|rescue|recovery') { continue }
-            $pkgJson = Join-Path $pdir.FullName 'package.json'
-            if (-not (Test-Path $pkgJson)) { continue }
-            $json = Get-Content $pkgJson -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
-            # A harness profile carries dsh.profile.bundles. Desktop profiles keep
-            # their dependencies empty (in-box bundles resolve from the desktop
-            # installation's own fallback), so do NOT require any dependency here.
-            $isProfile = $json.dsh -and $json.dsh.profile -and @($json.dsh.profile.bundles).Count -gt 0
-            if ($isProfile) {
-                $hits += [pscustomobject]@{
-                    Label      = 'desktop'
-                    DshHome    = $candidate
-                    Profile    = $pdir.Name
-                    ProfileDir = $pdir.FullName
-                }
-            }
-        }
-    }
-
-    if ($hits.Count -eq 0) {
-        if ($AllowMissing) { return @() }
-        throw 'No dsh-desktop harness profile was found. Install/run dsh-desktop once, then retry. Pass -DshHome "<userData>\harness" -ProfileName "<profile>" if detection missed it.'
-    }
-    if ($Profile) {
-        $filtered = @($hits | Where-Object { $_.Profile -eq $Profile })
-        if ($filtered.Count -eq 0) {
-            if ($AllowMissing) { return @() }
-            throw "Profile '$Profile' not found under detected desktop homes. Found: $(($hits | ForEach-Object { $_.Profile }) -join ', ')"
-        }
-        $hits = $filtered
-    }
-    if ($hits.Count -gt 1) {
-        if ($AllowMissing) { return @() }
-        $list = ($hits | ForEach-Object { "  $($_.Profile)  @  $($_.DshHome)" }) -join "`n"
-        throw "Multiple desktop profiles found:`n$list`nPass -ProfileName to choose one."
-    }
-    return @($hits)
 }
 
 # ---------------------------------------------------------------------------
@@ -268,16 +193,25 @@ function Invoke-Dsh {
     Write-Verbose "DSH_HOME=$DshHome"
     Write-Verbose "pnpm=$pnpmBin  storeMajor=$($storeInfo.Major) maxLen=$($storeInfo.MaxLength)"
     Write-Verbose "dsh $($Arguments -join ' ')"
+    # A native command writing to stderr (npm warnings do this constantly)
+    # becomes a terminating NativeCommandError under $ErrorActionPreference
+    # 'Stop' as soon as its output is merged. Keep this call non-terminating and
+    # judge it by its exit code alone.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $exitCode = 0
     try {
         & $npx --yes $spec @Arguments 2>&1 | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw "dsh exited with code $LASTEXITCODE (command: $spec $($Arguments -join ' '))" }
+        $exitCode = $LASTEXITCODE
     }
     finally {
+        $ErrorActionPreference = $prevEap
         $env:PATH = $oldPath
         $env:DSH_HOME = $oldHome
         $env:npm_config_virtual_store_dir_max_length = $oldLen
         $env:npm_config_ignore_workspace_root_check = $oldRootCheck
     }
+    if ($exitCode -ne 0) { throw "dsh exited with code $exitCode (command: $spec $($Arguments -join ' '))" }
 }
 
 function Get-InstalledBundles {
@@ -297,22 +231,9 @@ function Get-NodeModulePath {
 }
 
 function Get-EffectiveInstalledVersion {
-    # The version the profile actually runs. For dsh-desktop that is the pinned
-    # "generation" snapshot (dsh.desktop.generationProjection), which the app
-    # launches independently of the raw node_modules folder; everywhere else it
-    # is the installed package's own version.
+    # The version the profile actually runs: the installed package's own version.
     param($Target, [string]$Name)
-    $pkgJson = Join-Path $Target.ProfileDir 'package.json'
-    if (-not (Test-Path $pkgJson)) { return $null }
     try {
-        $json = Get-Content $pkgJson -Raw -ErrorAction Stop | ConvertFrom-Json
-        $proj = $json.dsh.desktop.generationProjection.plugins
-        if ($proj) {
-            $entry = $proj.PSObject.Properties[$Name]
-            if ($entry -and $entry.Value -and $entry.Value.visibleVersion) {
-                return [string]$entry.Value.visibleVersion
-            }
-        }
         $nm = Get-NodeModulePath -ProfileDir $Target.ProfileDir -Name $Name
         $nmPkg = Join-Path $nm 'package.json'
         if (Test-Path $nmPkg) {
@@ -356,17 +277,18 @@ function Install-To-Profile {
     Write-Step "Target: $($Target.Label) - profile '$($Target.Profile)' at $($Target.ProfileDir)"
     if (-not (Test-Path $Target.ProfileDir)) { Write-Host "  (profile directory does not exist yet; 'dsh plugin add' initializes it)" }
 
-    # Legacy rename: this pack used to ship the panel as 'dsh-focus' (row id
-    # 'focus'); it is now 'dsh-files' (row id 'files'). A profile still listing
-    # the old name would keep its bundle and patch layer after the new one is
-    # added, mounting a second dock and double-patching file-reference-local.
-    # Remove known old names before adding, so the rename is clean on upgrade.
-    $legacyNames = @('dsh-focus')
+    # Retired bundles: this pack used to ship the panel as 'dsh-focus' (row id
+    # 'focus', renamed to 'dsh-files' in alpha.10) and then as 'dsh-files' (row
+    # id 'files'), which the GUI now ships natively - the right Sidebar has its
+    # own Files tab, so this pack no longer contributes one. A profile still
+    # listing a retired name would keep its bundle and patch layer mounted next
+    # to the current one, so drop it before adding.
+    $legacyNames = @('dsh-focus', 'dsh-files')
     foreach ($legacy in $legacyNames) {
         if ($installed -contains $legacy) {
-            Write-Host "  - removing legacy bundle '$legacy' (renamed to dsh-files) ..."
+            Write-Host "  - removing retired bundle '$legacy' ..."
             Invoke-Dsh -DshHome $Target.DshHome -ProfileDir $Target.ProfileDir -Arguments @('plugin', '--profile', $Target.Profile, 'remove', $legacy)
-            Write-Host "  - removed legacy bundle '$legacy'"
+            Write-Host "  - removed retired bundle '$legacy'"
         }
     }
 
@@ -400,7 +322,7 @@ function Install-To-Profile {
 
 # ---------------------------------------------------------------------------
 
-Write-Step 'DeepSeek Harness plugin pack installer'
+Write-Step 'DeepSeek Harness plugin pack installer (web profile)'
 Write-Step "Repo: $repoRoot"
 
 $DshVersion = if ($DshVersion) { $DshVersion } else { Get-DshPin }
@@ -411,54 +333,19 @@ Assert-Tool 'npm'
 $packages = Get-Packages
 Write-Step ("Bundles to install: " + (($packages | ForEach-Object { $_.Name + '@' + $_.Version }) -join ', '))
 
-$processed = @()
-if ($Target -in @('all', 'cli')) {
-    $cli = Resolve-CliTarget -HomeDir $DshHome -Profile $ProfileName
-    Install-To-Profile -Target $cli -Packages $packages
-    $processed += 'cli'
-}
-if ($Target -in @('all', 'desktop')) {
-    # Explicit desktop requests must find a profile; a bundled "-Target all"
-    # run simply skips machines that have no dsh-desktop yet.
-    $desktops = Resolve-DesktopTargets -HomeDir $DshHome -Profile $ProfileName -AllowMissing:($Target -eq 'all')
-    if ($desktops.Count -eq 0) {
-        Write-Host ''
-        Write-Warning 'dsh-desktop was not detected (no harness profile found), so the desktop target was skipped.'
-        if ($Target -eq 'all') {
-            Write-Warning 'Install/run dsh-desktop once, then re-run "install.bat -Target desktop" to add the plugins there too.'
-        }
-    }
-    else {
-        Write-Host ''
-        Write-Warning 'dsh-desktop: make sure the desktop app is closed while installing.'
-        foreach ($desktop in $desktops) {
-            Install-To-Profile -Target $desktop -Packages $packages
-        }
-        $processed += 'desktop'
-    }
-}
+$web = Resolve-WebTarget -HomeDir $DshHome -Profile $ProfileName
+Install-To-Profile -Target $web -Packages $packages
 
-if ($processed.Count -gt 0) {
-    Write-Host ''
-    Write-Step "Done. Targets processed: $($processed -join ', ')"
-    Write-Host ''
-    Write-Host 'Next steps:'
-    if ($processed -contains 'cli') {
-        Write-Host '  - CLI      : RESTART the app to load the changes. Stop the running'
-        Write-Host '              "npx @deepseek-ai/dsh web" (Ctrl+C), start it again, then'
-        Write-Host '              HARD-REFRESH the browser tab (Ctrl+F5). The client bundle'
-        Write-Host '              is read once at app boot, so restart is required after every'
-        Write-Host '              code change; open the Files panel with the header button.'
-    }
-    if ($processed -contains 'desktop') {
-        Write-Host '  - Desktop  : relaunch dsh-desktop once so it refreshes its plugin'
-        Write-Host '              snapshot (Safe Mode blocks third-party plugins on purpose).'
-    }
-    if ($Target -eq 'all' -and $processed -notcontains 'desktop') {
-        Write-Host '  - Desktop  : skipped - not installed on this machine yet.'
-    }
-    Write-Host '  - API keys are never touched by this installer - add your key in Settings > Models.'
-}
-else {
-    throw 'Nothing was installed. See the messages above.'
-}
+Write-Host ''
+Write-Step 'Done.'
+Write-Host ''
+Write-Host 'Next steps:'
+Write-Host '  - RESTART the app to load the changes. Stop the running'
+Write-Host '    "npx @deepseek-ai/dsh web" (Ctrl+C), start it again, then'
+Write-Host '    HARD-REFRESH the browser tab (Ctrl+F5). The client bundle'
+Write-Host '    is read once at app boot, so a restart is required after every'
+Write-Host '    code change.'
+Write-Host '  - Open the right Sidebar with the conversation header expand button.'
+Write-Host '    Click a text/code file in its Files tab to edit it, or use the tab'
+Write-Host '    strip "+" -> Editor to create an editor tab.'
+Write-Host '  - API keys are never touched by this installer - add your key in Settings > Models.'

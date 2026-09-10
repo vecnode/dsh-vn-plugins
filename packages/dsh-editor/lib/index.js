@@ -1,32 +1,37 @@
 /**
  * dsh-editor — Node half.
  *
- * The Editor panel is a browser plugin, but opening and saving real text files
- * needs disk I/O that the browser cannot reach on this dsh line: the served
- * remote surface only lists file references (`remote.fileReferences.list`) and
- * never exposes file contents. This row therefore owns two authenticated
- * `connection.fetch` routes under /api/dsh-editor/* — the same mechanism the
- * shipped session-log-export plugin uses for its ZIP download route:
+ * The editor tab is a browser plugin, but reading and saving real text files
+ * needs disk I/O the browser cannot reach: the served remote surface
+ * (`remote.workspaceFiles`) reads files but exposes **no mutation operation**,
+ * so saving needs a route of our own. This row therefore owns two
+ * authenticated `connection.fetch` routes under /api/dsh-editor/* — the same
+ * mechanism the shipped session-log-export plugin uses for its ZIP download:
  *
- *   GET  /api/dsh-editor/file?cwd=<dir>&path=<rel>   read one text file
- *   PUT  /api/dsh-editor/file                        save one text file
- *   GET  /api/dsh-editor/vendor                      vendored CodeMirror 6 bundle
+ *   GET  /api/dsh-editor/file?session=<id>&path=<rel>   read one text file
+ *   PUT  /api/dsh-editor/file                           save one text file
+ *   GET  /api/dsh-editor/vendor                         vendored CodeMirror 6 bundle
  *
- * File semantics mirror the @deepseek-ai/dsh-fs "text" contract as closely as
- * a plain-fs row reasonably can, without depending on fs sandbox/policy state
+ * The session id is what the browser tab already carries (its address is
+ * `dsh-resource://file/session/<sessionId>/<path>`); the workspace root is
+ * resolved HERE, from the live session header when the session is running and
+ * from session persistence when it is cold — the same two-step lookup
+ * `@deepseek-ai/dsh-api-workspace-files` uses for its own reads. The client
+ * never names a root.
+ *
+ * File semantics mirror the @deepseek-ai/dsh-fs "text" contract as closely as a
+ * plain-fs row reasonably can, without depending on fs sandbox/policy state
  * that belongs to the tool layer:
  *
- *   - containment:  the requested file is resolved against the caller-supplied
- *     session cwd and realpath-checked to stay inside it, so a relative path
- *     can never escape the conversation's folder (a path that does not exist
- *     under the cwd is refused up front);
+ *   - containment:  the requested file is resolved against the session's
+ *     workspace root and realpath-checked to stay inside it, so a relative path
+ *     can never escape the conversation's folder;
  *   - text only:    content is decoded as strict UTF-8 and rejected when it is
- *     invalid or contains a NUL byte — binary files can never open in the
- *     text editor;
+ *     invalid or contains a NUL byte — binary files can never open in the text
+ *     editor;
  *   - bounded:      files over 2 MiB are refused instead of buffered;
  *   - atomic write: saves go to a private temp name in the same directory and
- *     are renamed over the target, so a crash never leaves a half-written
- *     file;
+ *     are renamed over the target, so a crash never leaves a half-written file;
  *   - optimistic:   the client echoes the mtime/size it opened with; a save
  *     whose on-disk stat no longer matches is refused (HTTP 409) instead of
  *     silently clobbering a concurrent change.
@@ -71,18 +76,62 @@ function fail(status, code, message) {
   return json(status, { ok: false, error: { code, message } })
 }
 
+function httpError(status, code, message, cause) {
+  const err = new Error(message)
+  err.status = status
+  err.code = code
+  if (cause) err.cause = cause
+  return err
+}
+
 /**
- * Resolve a relative workspace path against the conversation cwd and verify,
- * via realpath, that the result stays inside it. The client may pass any
- * string; nothing outside the cwd is ever reachable.
+ * The workspace root of one session: the live session header while the session
+ * is running, otherwise the stored header from session persistence. Mirrors the
+ * lookup `@deepseek-ai/dsh-api-workspace-files` performs for its own reads, and
+ * degrades to a typed failure (never a guess) when neither knows the session.
  *
- * @param {string} cwd - the session working directory (absolute).
- * @param {string} rel - the file path, relative to cwd.
+ * @param ctx - the plugin context (services are re-read per request).
+ * @param sessionId - the session the edited tab belongs to.
+ * @returns {Promise<string>} the session's cwd.
+ */
+async function sessionRoot(ctx, sessionId) {
+  if (typeof sessionId !== 'string' || sessionId.length === 0) {
+    throw httpError(400, 'BAD_REQUEST', 'A session id is required.')
+  }
+  const get = typeof ctx.get === 'function' ? (name) => ctx.get(name) : () => undefined
+  try {
+    const sessions = get('sessions')
+    const live = sessions && typeof sessions.get === 'function' ? sessions.get(sessionId) : undefined
+    const header = live && live.header
+    if (header && typeof header.cwd === 'string' && header.cwd.length > 0) return header.cwd
+  } catch (err) {
+    // fall through to persistence
+  }
+  try {
+    const persistence = get('sessionPersistence')
+    if (persistence && typeof persistence.stat === 'function') {
+      const snapshot = await persistence.stat(sessionId)
+      const header = snapshot && snapshot.header
+      if (header && typeof header.cwd === 'string' && header.cwd.length > 0) return header.cwd
+    }
+  } catch (err) {
+    // fall through to the typed failure below
+  }
+  throw httpError(409, 'NO_WORKSPACE', 'The workspace folder for this conversation is not available.')
+}
+
+/**
+ * Resolve a workspace-relative path against the session root and verify, via
+ * realpath, that the result stays inside it. The client may pass any string;
+ * nothing outside the workspace is ever reachable.
+ *
+ * @param cwd - the session workspace root (absolute).
+ * @param rel - the file path, relative to the workspace root.
  * @returns {Promise<string>} the realpath of the file.
  */
 async function resolveInside(cwd, rel) {
   if (typeof cwd !== 'string' || cwd.length === 0) {
-    throw httpError(400, 'BAD_REQUEST', 'A cwd is required.')
+    throw httpError(400, 'BAD_REQUEST', 'A workspace folder is required.')
   }
   if (typeof rel !== 'string' || rel.length === 0) {
     throw httpError(400, 'BAD_REQUEST', 'A path is required.')
@@ -121,21 +170,12 @@ function decodeText(buffer) {
   try {
     text = new TextDecoder('utf-8', { fatal: true }).decode(buffer)
   } catch (err) {
-    const e = httpError(415, 'NOT_TEXT', 'This file is not UTF-8 text and cannot open in the text editor.', err)
-    throw e
+    throw httpError(415, 'NOT_TEXT', 'This file is not UTF-8 text and cannot open in the text editor.', err)
   }
   if (text.indexOf('\u0000') >= 0) {
     throw httpError(415, 'NOT_TEXT', 'This file looks binary and cannot open in the text editor.')
   }
   return text
-}
-
-function httpError(status, code, message, cause) {
-  const err = new Error(message)
-  err.status = status
-  err.code = code
-  if (cause) err.cause = cause
-  return err
 }
 
 function readErrorToResponse(err) {
@@ -145,13 +185,21 @@ function readErrorToResponse(err) {
   return json(status, { ok: false, error: { code, message } })
 }
 
-/** GET/PUT /api/dsh-editor/file — read or write one text file. */
-async function handleFile(request) {
+/**
+ * GET/HEAD/PUT /api/dsh-editor/file — read or write one text file of one
+ * session's workspace.
+ *
+ * @param ctx - the plugin context, used to resolve the session workspace root.
+ * @param request - the incoming request.
+ * @returns {Promise<Response>} the JSON answer.
+ */
+async function handleFile(ctx, request) {
   try {
     if (request.method === 'GET' || request.method === 'HEAD') {
       const url = new URL(request.url)
-      const cwd = url.searchParams.get('cwd') || ''
+      const sessionId = url.searchParams.get('session') || ''
       const rel = url.searchParams.get('path') || ''
+      const cwd = await sessionRoot(ctx, sessionId)
       const target = await resolveInside(cwd, rel)
       let stats
       try {
@@ -167,7 +215,13 @@ async function handleFile(request) {
       }
       const buffer = await fsp.readFile(target)
       const text = decodeText(buffer)
-      const body = {
+      if (request.method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+        })
+      }
+      return json(200, {
         ok: true,
         path: rel,
         text,
@@ -175,29 +229,23 @@ async function handleFile(request) {
         version: versionOf(stats),
         mtimeMs: stats.mtimeMs,
         size: stats.size,
-      }
-      if (request.method === 'HEAD') {
-        return new Response(null, {
-          status: 200,
-          headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-        })
-      }
-      return json(200, body)
+      })
     }
 
-    // PUT — save. { cwd, path, text, expected?: { mtimeMs, size } }
+    // PUT — save. { session, path, text, expected?: { mtimeMs, size } }
     let payload
     try {
       payload = await request.json()
     } catch (err) {
       return fail(400, 'BAD_REQUEST', 'Expected a JSON body.')
     }
-    const cwd = typeof payload.cwd === 'string' ? payload.cwd : ''
+    const sessionId = typeof payload.session === 'string' ? payload.session : ''
     const rel = typeof payload.path === 'string' ? payload.path : ''
     const text = typeof payload.text === 'string' ? payload.text : null
     if (text === null) {
       return fail(400, 'BAD_REQUEST', 'Expected a text field.')
     }
+    const cwd = await sessionRoot(ctx, sessionId)
     const target = await resolveInside(cwd, rel)
     let before
     try {
@@ -213,8 +261,8 @@ async function handleFile(request) {
       throw httpError(413, 'TOO_LARGE', 'The file would be larger than ' + Math.round(MAX_TEXT_BYTES / 1024 / 1024) + ' MiB and was not saved.')
     }
 
-    // Optimistic concurrency: the client opened version V; refuse to clobber
-    // a file whose stat moved since then.
+    // Optimistic concurrency: the client opened version V; refuse to clobber a
+    // file whose stat moved since then.
     const expected = payload.expected
     if (expected && typeof expected.mtimeMs === 'number') {
       const sameMtime = Math.abs(before.mtimeMs - expected.mtimeMs) < 1
@@ -297,7 +345,7 @@ async function handleVendor(request) {
 }
 
 /**
- * Activate the plugin row: register the two authenticated routes.
+ * Activate the plugin row: register the authenticated routes.
  * @param ctx - cordis context (inject: connection).
  */
 export function apply(ctx) {
@@ -311,7 +359,7 @@ export function apply(ctx) {
     const offFile = connection.fetch.register({
       path: FILE_ROUTE,
       methods: ['GET', 'HEAD', 'PUT'],
-      fetch: handleFile,
+      fetch: (request) => handleFile(ctx, request),
     })
     const offVendor = connection.fetch.register({
       path: VENDOR_ROUTE,

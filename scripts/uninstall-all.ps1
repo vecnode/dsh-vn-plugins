@@ -1,28 +1,27 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Removes the dsh-vn-plugins bundle set from DeepSeek Harness profiles
-    (cli and/or dsh-desktop). Removing a bundle also removes its patch layer,
-    so the file-reference override shipped by dsh-files is reverted too.
+    Removes the dsh-vn-plugins bundle set from the DeepSeek Harness web profile,
+    together with any retired bundle name this pack shipped before (dsh-focus,
+    dsh-files). Removing a bundle also removes its patch layer.
 
 .DESCRIPTION
-    With -Target all (the default) a machine without dsh-desktop is fine: the
-    desktop target is skipped with a warning and the run still succeeds. Only
-    an explicit "-Target desktop" fails when no desktop profile can be found.
+    One target only: the raw CLI/web install used by "npx @deepseek-ai/dsh web"
+    (DSH_HOME or %USERPROFILE%\.dsh, profile "web" by default). DSH Desktop is
+    not supported by this pack.
 
-    pnpm handling: each harness profile stores its pnpm layout in
+    pnpm handling: the harness profile stores its pnpm layout in
     node_modules\.modules.yaml. The matching local pnpm major is bootstrapped
     under .\tools and invoked with the profile's own virtual-store settings.
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('all', 'cli', 'desktop')]
-    [string]$Target = 'all',
+    [ValidateSet('web', 'cli')]
+    [string]$Target = 'web',
     [string]$Plugin = '',
     [string]$DshHome = '',
     [string]$ProfileName = '',
-    [string]$DshVersion = '',
-    [switch]$Force
+    [string]$DshVersion = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -104,71 +103,16 @@ function Ensure-PnpmForMajor {
     return $binDir
 }
 
-function Resolve-CliTarget {
+function Resolve-WebTarget {
     param([string]$HomeDir, [string]$Profile)
     if (-not $HomeDir) { $HomeDir = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' } }
     if (-not $Profile) { $Profile = 'web' }
     return [pscustomobject]@{
-        Label      = 'cli'
+        Label      = 'web'
         DshHome    = $HomeDir
         Profile    = $Profile
         ProfileDir = (Join-Path $HomeDir "profiles\$Profile")
     }
-}
-
-function Resolve-DesktopTargets {
-    param([string]$HomeDir, [string]$Profile, [switch]$AllowMissing)
-
-    $candidateHomes = @()
-    if ($HomeDir) { $candidateHomes += $HomeDir }
-    else {
-        foreach ($root in @($env:APPDATA, $env:LOCALAPPDATA)) {
-            if (-not $root -or -not (Test-Path $root)) { continue }
-            foreach ($dir in (Get-ChildItem $root -Directory -ErrorAction SilentlyContinue)) {
-                $harness = Join-Path $dir.FullName 'harness'
-                if (Test-Path (Join-Path $harness 'profiles')) { $candidateHomes += $harness }
-            }
-        }
-    }
-
-    $hits = @()
-    foreach ($candidate in ($candidateHomes | Select-Object -Unique)) {
-        $profilesRoot = Join-Path $candidate 'profiles'
-        if (-not (Test-Path $profilesRoot)) { continue }
-        foreach ($pdir in (Get-ChildItem $profilesRoot -Directory -ErrorAction SilentlyContinue)) {
-            if ($pdir.Name -eq 'node_modules' -or $pdir.Name -match 'safe|rescue|recovery') { continue }
-            $pkgJson = Join-Path $pdir.FullName 'package.json'
-            if (-not (Test-Path $pkgJson)) { continue }
-            $json = Get-Content $pkgJson -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
-            $isProfile = $json.dsh -and $json.dsh.profile -and @($json.dsh.profile.bundles).Count -gt 0
-            if ($isProfile) {
-                $hits += [pscustomobject]@{
-                    Label      = 'desktop'
-                    DshHome    = $candidate
-                    Profile    = $pdir.Name
-                    ProfileDir = $pdir.FullName
-                }
-            }
-        }
-    }
-
-    if ($hits.Count -eq 0) {
-        if ($AllowMissing) { return @() }
-        throw 'No dsh-desktop harness profile was found. Install/run dsh-desktop once, then retry. Pass -DshHome "<userData>\harness" -ProfileName "<profile>" if detection missed it.'
-    }
-    if ($Profile) {
-        $filtered = @($hits | Where-Object { $_.Profile -eq $Profile })
-        if ($filtered.Count -eq 0) {
-            if ($AllowMissing) { return @() }
-            throw "Profile '$Profile' not found. Found: $(($hits | ForEach-Object { $_.Profile }) -join ', ')"
-        }
-        $hits = $filtered
-    }
-    if ($hits.Count -gt 1) {
-        if ($AllowMissing) { return @() }
-        throw "Multiple desktop profiles found; pass -ProfileName to choose one.`n$(($hits | ForEach-Object { "  $($_.Profile) @ $($_.DshHome)" }) -join "`n")"
-    }
-    return @($hits)
 }
 
 function Get-DshInvoker {
@@ -195,16 +139,23 @@ function Invoke-Dsh {
     if ($storeInfo.MaxLength) { $env:npm_config_virtual_store_dir_max_length = $storeInfo.MaxLength }
     $env:npm_config_ignore_workspace_root_check = 'true'
     Write-Verbose "DSH_HOME=$DshHome pnpm=$pnpmBin storeMajor=$($storeInfo.Major) maxLen=$($storeInfo.MaxLength)"
+    # See install-all.ps1: stderr from a native command would otherwise become a
+    # terminating NativeCommandError under $ErrorActionPreference 'Stop'.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $exitCode = 0
     try {
         & $npx --yes $spec @Arguments 2>&1 | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw "dsh exited with code $LASTEXITCODE (command: $spec $($Arguments -join ' '))" }
+        $exitCode = $LASTEXITCODE
     }
     finally {
+        $ErrorActionPreference = $prevEap
         $env:PATH = $oldPath
         $env:DSH_HOME = $oldHome
         $env:npm_config_virtual_store_dir_max_length = $oldLen
         $env:npm_config_ignore_workspace_root_check = $oldRootCheck
     }
+    if ($exitCode -ne 0) { throw "dsh exited with code $exitCode (command: $spec $($Arguments -join ' '))" }
 }
 
 function Get-InstalledBundles {
@@ -222,14 +173,15 @@ function Remove-From-Profile {
     Write-Host ''
     Write-Step "Target: $($Target.Label) - profile '$($Target.Profile)' at $($Target.ProfileDir)"
     if (-not (Test-Path $Target.ProfileDir)) { Write-Host '  (profile not present - nothing to do)'; return }
-    # Legacy rename cleanup: this pack shipped the panel as 'dsh-focus' before
-    # alpha.10 renamed it to 'dsh-files'; remove any stale old-name bundle too.
-    $legacyNames = @('dsh-focus')
+    # Retired bundles: this pack shipped the panel as 'dsh-focus' (renamed to
+    # 'dsh-files' in alpha.10) and later as 'dsh-files', which the GUI now ships
+    # natively; remove any stale retired name too.
+    $legacyNames = @('dsh-focus', 'dsh-files')
     foreach ($legacy in $legacyNames) {
         if ($installed -contains $legacy) {
-            Write-Host "  - removing legacy bundle '$legacy' (renamed to dsh-files) ..."
+            Write-Host "  - removing retired bundle '$legacy' ..."
             Invoke-Dsh -DshHome $Target.DshHome -ProfileDir $Target.ProfileDir -Arguments @('plugin', '--profile', $Target.Profile, 'remove', $legacy)
-            Write-Host "  - removed legacy bundle '$legacy'"
+            Write-Host "  - removed retired bundle '$legacy'"
         }
     }
     foreach ($pkg in $Packages) {
@@ -245,37 +197,14 @@ function Remove-From-Profile {
 
 # ---------------------------------------------------------------------------
 
-Write-Step 'DeepSeek Harness plugin pack uninstaller'
+Write-Step 'DeepSeek Harness plugin pack uninstaller (web profile)'
 $DshVersion = if ($DshVersion) { $DshVersion } else { Get-DshPin }
 Assert-Tool 'node'
 Assert-Tool 'npm'
 $packages = Get-Packages
 
-$processed = @()
-if ($Target -in @('all', 'cli')) {
-    $cli = Resolve-CliTarget -HomeDir $DshHome -Profile $ProfileName
-    Remove-From-Profile -Target $cli -Packages $packages
-    $processed += 'cli'
-}
-if ($Target -in @('all', 'desktop')) {
-    $desktops = Resolve-DesktopTargets -HomeDir $DshHome -Profile $ProfileName -AllowMissing:($Target -eq 'all')
-    if ($desktops.Count -eq 0) {
-        Write-Host ''
-        Write-Warning 'dsh-desktop was not detected (no harness profile found), so the desktop target was skipped.'
-    }
-    else {
-        Write-Warning 'dsh-desktop: make sure the desktop app is closed while uninstalling.'
-        foreach ($desktop in $desktops) {
-            Remove-From-Profile -Target $desktop -Packages $packages
-        }
-        $processed += 'desktop'
-    }
-}
+$web = Resolve-WebTarget -HomeDir $DshHome -Profile $ProfileName
+Remove-From-Profile -Target $web -Packages $packages
 
 Write-Host ''
-if ($processed.Count -gt 0) {
-    Write-Step "Uninstall finished. Targets processed: $($processed -join ', '). Restart the CLI/desktop app afterwards."
-}
-else {
-    Write-Step 'Nothing to do - no matching target found.'
-}
+Write-Step 'Uninstall finished. Restart the CLI app afterwards.'

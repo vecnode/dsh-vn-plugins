@@ -1,51 +1,57 @@
 # Compatibility
 
-The pack targets the harness line DeepSeek currently ships to both the raw CLI
-(`npx @deepseek-ai/dsh`) and dsh-desktop stable.
+The pack targets the harness line DeepSeek ships to the raw web install
+(`npx @deepseek-ai/dsh web`). DSH Desktop is not supported by this pack.
 
 ## Current pin
 
 | | |
 |---|---|
-| `@deepseek-ai/dsh` | `0.1.2-rc.1` (npm `latest` / `next`) |
-| dsh-desktop stable | built on the same rc.1 line |
-| Right-sidebar seam | not yet released (on master / `0.1.5-alpha.1` experimental) |
+| `@deepseek-ai/dsh` | `0.1.5-rc.1` |
+| Install target | the web profile only (`$DSH_HOME\profiles\web`) |
+| Right-sidebar seam | **shipped** - `@deepseek-ai/dsh-client-ui-sidebar-right` provides the `sidebarRightTabs` registry, the `sidebarRight` controller and the keyed `sidebar.right.pane.tab` seats |
 
-## What this means for the plugins
+## What this means for the plugin
 
-- **dsh-files** works against the rc.1 surfaces that already exist and are
-  shipped:
-  - the `shell.overlay` seat declared by core `ui-layout` (empty in the shipped
-    web app — no conflict, no takeover; the DOM dock re-parents into its layer
-    element),
-  - the `conversation.session.header.utilities` list seat (declared by core
-    `ui-conversation`) — the "Files" trigger button registers there, exactly
-    like the shipped "Session log" capsule (`dsh-session-log-export`),
-  - `ctx.sessions` (`list.current` + `byId[id].cwd`),
-  - `ctx.remote.fileReferences.list` (the `@` file-menu remote; kind-aware and
-    cwd-scoped). The bundle patch raises that row's `maxResults` cap (20 → 2000)
-    so folder listings aren't truncated.
-- Files renders as a **dock on the right edge** (the GUI has no third-party
-  right-panel seat in rc.1 — the native right sidebar with the public tab-type
-  registry arrives in a later release). The moment DSH ships that seam, the
-  dock is re-homed onto it; only the `client.js` mounting code changes.
-- The dock is a **tab host**: Files is one Claude-style tab with a close-x;
-  more panels register the same way later (each with its own descriptor and
-  header trigger).
+- **dsh-editor** registers a **tab type** into the product's own right Sidebar:
+  - `ctx.sidebarRightTabs.register({ id, kind, patterns, priority, canOpen, title, guide })`
+    (stage one: what the type is),
+  - the keyed body/title seats `sidebar.right.pane.tab` and
+    `sidebar.right.pane.tab.title`, registered with `key` = the definition's id
+    (stage two: what a tab draws),
+  - the `extension` priority band, so text files open editable rather than in
+    the shipped read-only viewer; `canOpen` vetoes every extension the shipped
+    previews own (md/markdown/html/images/pdf/office/archive/media/binary) and
+    every path outside the session workspace,
+  - a `guide` entry, which is what the tab strip's "+" control lists.
+- The workspace tree it opens files from is the product's own Files tab
+  (`@deepseek-ai/dsh-client-ui-sidebar-files`) over `remote.workspaceFiles`.
+  That Remote is read-only, so saving goes through the plugin's own
+  authenticated route; the session's workspace root is resolved host-side from
+  the live session header or session persistence.
+- The pack's **own Files panel is retired**: `dsh-files` (row `files`) and its
+  pre-alpha.10 name `dsh-focus` are pruned from every profile by the installer.
 
 ## Upgrading the pack when DSH moves
 
 1. Bump `dsh` in `.dsh-version.json` (and each package's tested note).
 2. Re-run `install.bat -Force` to re-add bundles under the new CLI pin.
-3. If a core API moved (slot names, services, remotes), adapt the affected
-   package and bump its alpha version.
+3. If a core API moved (registry shape, seat names, framework props, route
+   registration), adapt the affected package and bump its alpha version.
 4. Re-run `uninstall.bat` on machines that should drop the old version first.
 
-## Renames within the pack
+## Renames and retirements within the pack
 
-- **alpha.9 → alpha.10**: `dsh-focus` (row `focus`) was renamed to
-  `dsh-files` (row `files`). Installers prune the old bundle name; upgrade by
-  re-running `install.bat`.
+- **alpha.9 → alpha.10**: `dsh-focus` (row `focus`) was renamed to `dsh-files`
+  (row `files`).
+- **editor alpha.1 → alpha.2**: `dsh-files` was retired outright - the harness
+  now ships the Files tab natively, and the editor became a tab type of the
+  native right Sidebar instead of a panel inside the pack's own dock.
+- **installer alpha.2**: the DSH Desktop target was removed; the pack installs
+  into the web profile only.
+
+  Installers prune both retired bundle names; upgrade by re-running
+  `install.bat`, then restart the app and hard-refresh the browser.
 
 ## Alpha policy
 

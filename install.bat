@@ -1,9 +1,10 @@
 @echo off
 rem ============================================================
 rem  dsh-vn-plugins installer (double-click friendly)
-rem  Installs the plugin pack into the CLI profile (npx dsh web)
-rem  and/or dsh-desktop. Targets: all (default) | cli | desktop
-rem  e.g.  install.bat -Target cli
+rem  Installs the plugin pack into the DeepSeek Harness WEB
+rem  profile only - the raw install used by "npx dsh web"
+rem  (DSH_HOME or %USERPROFILE%\.dsh, profile web).
+rem  DSH Desktop is not supported by this pack.
 rem
 rem  A plain run always (re-)adds the bundles from this repo at
 rem  their current version - i.e. it behaves as if -Force had been

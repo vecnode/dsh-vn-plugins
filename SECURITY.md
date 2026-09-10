@@ -16,8 +16,17 @@
   through `npx @deepseek-ai/dsh@<pinned>`, never a floating `latest`.
 - **Browser bundle runs in the harness's own module sandbox** (module-table
   format, `require("react")`-only, services reached through declared `inject`
-  dependencies) and touches the filesystem **only** through the harness's own
-  kind-aware file-reference remote — it never issues its own disk I/O.
+  dependencies). It reads files through the harness's own workspace-files
+  remote; the only disk I/O the pack itself performs is the editor's
+  **authenticated `connection.fetch` routes**, which are confined to the
+  session's own workspace root:
+  - every path is resolved against that root and **realpath-checked to stay
+    inside it** (a path that escapes is refused),
+  - reads are strict UTF-8 text only, ≤ 2 MiB,
+  - writes are atomic (private temp file renamed over the target) and refuse to
+    clobber a file that changed on disk since it was opened (HTTP 409).
+  No other path is ever opened, and nothing outside the conversation folder is
+  reachable through those routes.
 - **Nothing is ever fetched or executed at build/install time** beyond the
   pinned npm packages the installer declares (pnpm under `tools/` is
   bootstrapped locally, no global/admin installs).
@@ -27,7 +36,7 @@
 | Component | Supported |
 |---|---|
 | Repo default branch (`main`) | yes |
-| Harness line pinned in `.dsh-version.json` (`0.1.2-rc.1`) | yes |
+| Harness line pinned in `.dsh-version.json` (`0.1.5-rc.1`) | yes |
 | Older pins / master APIs | no — upgrade the pin, then re-verify |
 
 ## Reporting a vulnerability
@@ -50,7 +59,7 @@ the build/docs):
   bumps the version and is re-installed with `-Force` before it is announced.
 - The installer is **idempotent** and skips already-installed bundles unless
   forced; uninstall removes the bundle and its patch layer cleanly.
-- dsh-desktop's Safe Mode intentionally blocks third-party plugins — do not
-  weaken it.
+- The pack targets the **web profile only**; it never installs into, or writes
+  to, any other harness home.
 - Treat this pack as **personal tooling**: do not run it in multi-tenant or
   untrusted environments, and review any new dependency before it is added.

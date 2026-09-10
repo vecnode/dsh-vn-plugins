@@ -2,10 +2,11 @@
 #
 # Applied on top of the shipped web bundle rows. This plugin registers ONE
 # extra row ('editor') that owns the plugin's Node half (the authenticated
-# /api/dsh-editor/* routes) and therefore ships its browser half (dsh.client)
-# with the Loader entry. Nothing else is patched: the tab itself lives in the
-# dsh-files dock, which this panel registers into through the window bridge
-# dsh-files publishes.
+# /api/dsh-editor/* routes: read, save, vendored CodeMirror) and therefore
+# ships its browser half (dsh.client) with the Loader entry. Nothing else is
+# patched: the editor tab itself registers into the GUI's own right Sidebar
+# (the '@deepseek-ai/dsh-client-ui-sidebar-right' tab-type registry, which the
+# shipped 'Start' and 'Files' tabs also use) from the browser half alone.
 - insert:
     - id: editor
       name: 'dsh-editor'

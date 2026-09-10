@@ -1,36 +1,34 @@
 # dsh-vn-plugins
 
-Personal plugin pack for **DeepSeek Harness** (Windows), installable into both
-places you run the harness:
-
-- the **raw CLI install** — `npx @deepseek-ai/dsh web` (profile `web` under `$DSH_HOME`, default `%USERPROFILE%\.dsh`)
-- **dsh-desktop** — its own harness home under the Electron user data folder
+Personal plugin pack for **DeepSeek Harness** (Windows), installed into the
+**web profile** only — the raw install you run with
+`npx @deepseek-ai/dsh web` (profile `web` under `$DSH_HOME`, default
+`%USERPROFILE%\.dsh`). **DSH Desktop is not supported** by this pack.
 
 Everything ships as standard **dsh bundles** (npm packages with
 `dsh.bundle`/`dsh.client` + a `cordis.patch.yml` layer), so install and
-uninstall are clean on both targets and nothing patches core Harness files.
+uninstall are clean and nothing patches core Harness files.
 
 ## Plugins (all **alpha** until the owner promotes them)
 
 | Package | What it does | Status |
 |---|---|---|
-| [`packages/dsh-files`](packages/dsh-files) | **Files** — a right-hand panel dock next to the chat (never overlapping it), opened with a **"Files" trigger** in the session header beside the "Session log" capsule. Claude-style tab strip with a close-x per panel, Claude-Code-style search + refresh toolbar, and the current conversation's folder as an inline tree (dotfiles on by default with a footer toggle). No collapsed rail: the panel is expanded or gone. | alpha `0.1.0-alpha.12` |
-| [`packages/dsh-editor`](packages/dsh-editor) | **Editor** — a second tab in the Files dock: opens **text files** from the Files tree (double-click a file row), edits them with a vendored **CodeMirror 6** engine, and saves them back to disk over an authenticated plugin route (find-in-file toolbar + **Save**, no refresh). "Editor" trigger sits right of "Files". | alpha `0.1.0-alpha.1` |
+| [`packages/dsh-editor`](packages/dsh-editor) | **Editor** — a **tab type for the GUI's own right Sidebar** (the column the header's expand button opens, next to the shipped **Start** and **Files** tabs). It claims `dsh-resource://file/**` in the `extension` band, so opening a **text/code file** in the Sidebar (a click in the Files tree, a file link in the conversation) opens it **editable** there instead of in the read-only preview — Markdown/HTML/images/PDF keep their own previews. It also contributes a guide entry, so the tab strip's **"+"** control offers **Editor**: picking it creates an editor tab with a workspace file picker. Edits are saved to disk over an authenticated plugin route (find-in-file toolbar + **Save**). | alpha `0.1.0-alpha.2` |
+
+> The pack used to ship its own **Files** panel (`dsh-files`, earlier
+> `dsh-focus`) with a private dock and header capsules. The harness now ships
+> that panel natively — the right Sidebar has a Files tab of its own — so the
+> plugin was **retired** and the installer prunes both old names from every
+> profile it touches.
 
 ## Install (Windows)
 
 Double-click **`install.bat`**, or run from a terminal:
 
 ```bat
-install.bat                  :: both targets
-install.bat -Target cli      :: only the raw CLI profile
-install.bat -Target desktop  :: only dsh-desktop (close the app first)
+install.bat                  :: the web profile (the only target)
+install.bat -Target cli      :: same thing; "cli" is kept as an alias
 ```
-
-> With the default `-Target all`, a machine that has **no dsh-desktop** is not
-> an error: the desktop target is skipped with a warning and the run succeeds.
-> Use `-Target desktop` (which fails loudly when no desktop profile is found)
-> after installing/running dsh-desktop.
 
 What it does (idempotent — safe to re-run):
 
@@ -38,25 +36,24 @@ What it does (idempotent — safe to re-run):
    `npx @deepseek-ai/dsh@<pinned>`,
 2. bootstraps a private copy of pnpm under `.\tools` when pnpm is missing
    (no admin rights, nothing global),
-3. detects the CLI profile (`$DSH_HOME\profiles\web`) and the dsh-desktop
-   harness profile(s) under `%APPDATA%`,
-4. **prunes legacy bundle names** (`dsh-focus`, the alpha.9 name of the Files
-   plugin) from each profile so an upgrade cannot double-mount,
-5. runs `dsh plugin --profile <profile> add <bundle>` for every package under
+3. resolves the web profile (`$DSH_HOME\profiles\web`, `$DSH_HOME` = env var or
+   `%USERPROFILE%\.dsh`),
+4. **prunes retired bundle names** (`dsh-focus`, `dsh-files` — the pack's own
+   Files panel, now shipped by the harness itself) so an upgrade cannot
+   double-mount,
+5. runs `dsh plugin --profile web add <bundle>` for every package under
    `packages/` (skips already-installed bundles unless `-Force`),
 6. prints next steps. It never touches API keys — add yours in
    **Settings → Models**.
 
-Remove with **`uninstall.bat`** (same target detection). Removing the bundle
-also removes its patch layer, so the `file-reference-local` row override that
-dsh-files ships is reverted automatically.
+Remove with **`uninstall.bat`**. Removing a bundle also removes its patch layer.
 
 ## Notes
 
 - Plugins are **alpha** and are built against the harness line pinned in
-  `.dsh-version.json` (`0.1.2-rc.1` — the current `latest`/`next` on npm and
-  the line dsh-desktop stable is built on). When DSH evolves, bump the pin and
-  adapt the plugins (see `docs/COMPATIBILITY.md`).
+  `.dsh-version.json` (`0.1.5-rc.1`). That line is what the right Sidebar's
+  tab-type registry exists on; when DSH evolves, bump the pin and adapt the
+  plugins (see `docs/COMPATIBILITY.md`).
 - **Language**: the UI halves are intentionally **plain JavaScript**, no build
   step — core client packages ship hand-written module-table bundles and the
   edit→restart loop stays instant. The one exception is `dsh-editor`'s
@@ -64,21 +61,14 @@ dsh-files ships is reverted automatically.
   classic bundle rebuilt only when the CM6 version set changes (see
   `packages/dsh-editor/README.md`); the plugin's own client code stays
   hand-written.
-- **Iterating on a change**: double-clicking `install.bat` (or `install.bat
-  -Target cli|desktop`) now **re-syncs every bundle whose version in this repo
-  changed** — bump `package.json` + `.dsh-version.json`, then a plain
-  double-click re-adds it; `install.bat -Force` re-adds regardless. Two extra
-  rules for the loop to *look* applied:
-  - the raw-CLI profile installs `dsh-files` as a **live link** into this repo,
-    so code edits are already "installed" there — you only need to **restart**
-    `npx @deepseek-ai/dsh web` and **hard-refresh** the browser (Ctrl+F5). The
-    client bundle is read once at app boot; the panel tab bar now shows the
-    version badge (e.g. `alpha.11`) so you can confirm the new build loaded.
-  - the **desktop** target loads a pinned *generation snapshot*, which
-    refreshes when dsh-desktop launches (close the app first, then
-    `install.bat -Target desktop`; `-Force` if the version did not change).
-- The desktop app's Safe Mode intentionally blocks third-party plugins; the
-  normal profile loads them.
+- **Iterating on a change**: double-clicking `install.bat` **re-syncs every
+  bundle whose version in this repo changed** — bump `package.json` +
+  `.dsh-version.json`, then a plain double-click re-adds it;
+  `install.bat -Force` re-adds regardless. One extra rule for the loop to
+  *look* applied: the web profile installs `dsh-editor` as a **live link** into
+  this repo, so code edits are already "installed" there — you only need to
+  **restart** `npx @deepseek-ai/dsh web` and **hard-refresh** the browser
+  (Ctrl+F5). The client bundle is read once at app boot.
 - See [`docs/INSTALL.md`](docs/INSTALL.md) for the manual path and
   troubleshooting.
 
@@ -93,7 +83,7 @@ dsh-files ships is reverted automatically.
 
 ```
 AGENTS.md              quick-start brief for coding agents working in this repo
-ARCHITECTURE.md        deep dive: plugin model, Files geometry/data flow, installer
+ARCHITECTURE.md        deep dive: plugin model, the right-Sidebar editor tab, installer
 LICENSE                MIT license (vecnode)
 SECURITY.md            security policy: supported line, private reporting, hardening
 packages/<bundle>/     one standalone dsh bundle (package.json + cordis.patch.yml + lib/)

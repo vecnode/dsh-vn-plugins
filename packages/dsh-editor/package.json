@@ -1,7 +1,7 @@
 {
   "name": "dsh-editor",
-  "version": "0.1.0-alpha.1",
-  "description": "Editor: a code/text editor tab in the Files right dock for the DeepSeek Harness Web UI. Opens text files from the Files panel, edits them with a vendored CodeMirror 6, and saves them back to disk through an authenticated plugin route. Alpha.",
+  "version": "0.1.0-alpha.2",
+  "description": "Editor: a CodeMirror 6 text/code editor tab type for the DeepSeek Harness Web UI right Sidebar. Opens text files editable instead of in the read-only preview, is creatable from the tab strip's + control, and saves through an authenticated plugin route. Alpha.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -20,12 +20,10 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-session",
         "@deepseek-ai/dsh-api-remotes",
-        "@deepseek-ai/dsh-api-session-controller"
+        "@deepseek-ai/dsh-api-workspace-files",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
       ]
     }
   },
