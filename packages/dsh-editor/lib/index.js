@@ -356,14 +356,20 @@ export function apply(ctx) {
   }
   ctx.effect(() => {
     ctx.logger?.debug?.('[dsh-editor] node half active (alpha)')
+    // `requestBody: 'buffered'` is REQUIRED: Connection's HTTP bridge picks the
+    // streaming branch for a route that leaves it undefined, and building a
+    // streaming Request for a bodyless method (GET/HEAD) throws before the
+    // handler ever runs (the web server then answers a bare 400).
     const offFile = connection.fetch.register({
       path: FILE_ROUTE,
       methods: ['GET', 'HEAD', 'PUT'],
+      requestBody: 'buffered',
       fetch: (request) => handleFile(ctx, request),
     })
     const offVendor = connection.fetch.register({
       path: VENDOR_ROUTE,
       methods: ['GET', 'HEAD'],
+      requestBody: 'buffered',
       fetch: handleVendor,
     })
     return () => {

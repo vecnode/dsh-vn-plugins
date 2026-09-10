@@ -3,7 +3,7 @@
   "dsh": "0.1.5-rc.1",
   "packages": {
     "dsh-editor": {
-      "version": "0.1.0-alpha.2",
+      "version": "0.1.0-alpha.3",
       "rows": ["editor"],
       "rowOverrides": []
     }

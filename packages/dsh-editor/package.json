@@ -1,6 +1,6 @@
 {
   "name": "dsh-editor",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Editor: a CodeMirror 6 text/code editor tab type for the DeepSeek Harness Web UI right Sidebar. Opens text files editable instead of in the read-only preview, is creatable from the tab strip's + control, and saves through an authenticated plugin route. Alpha.",
   "type": "module",
   "main": "lib/index.js",
