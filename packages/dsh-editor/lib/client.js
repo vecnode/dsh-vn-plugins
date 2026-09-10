@@ -20,16 +20,26 @@
  *     preview tab;
  *   - it contributes a guide entry, so the tab strip's "+" control - which
  *     opens the "Start" page - offers "Editor". Picking it creates an editor
- *     tab whose body is a workspace file picker; choosing a file there opens it
- *     in that same tab (`replaceTab`).
+ *     tab that opens on a BLANK document: nothing is read from disk until the
+ *     user saves, and there is no workspace browser inside the tab. Saving it
+ *     (the Save button or Ctrl+S) asks for a file name - extension included -
+ *     through the pack's shared dialog surface (`dsh-modal`'s `modals`
+ *     service, resolved lazily so the editor still works without it), creates
+ *     the file inside the conversation folder, and swaps the tab record for
+ *     that file's own tab, so the chip title becomes the file name and later
+ *     saves are ordinary in-place saves.
  *
- * Data path (alpha.2):
+ * Data path (alpha.4):
  *   - read:  GET /api/dsh-editor/file?session=<id>&path=<rel> returns strict
  *     UTF-8 text only - binary / invalid-UTF-8 files are refused server-side,
  *     so the editor can never open a non-text file;
  *   - save:  PUT /api/dsh-editor/file with the mtime/size the file had when it
  *     was opened; a file that changed on disk meanwhile answers 409 and the
  *     panel offers "Reload" / "Save anyway" instead of clobbering it;
+ *   - create: the same PUT with `create: true` writes a NEW file at a
+ *     workspace-relative path whose parent folder already exists inside the
+ *     workspace; an existing target answers 409 instead of overwriting a file
+ *     the user never opened;
  *   - the tab's address already carries the authorizing session
  *     (`dsh-resource://file/session/<sessionId>/<path>`), so the client echoes
  *     only the session id and the workspace-relative path and the Node half
@@ -57,7 +67,7 @@ window.__ModuleLoader__.load({
 
     const React = require('react')
     const h = React.createElement
-    const { useState, useEffect, useRef } = React
+    const { useEffect, useRef } = React
 
     // ---------------------------------------------------------------------
     // Constants
@@ -75,7 +85,9 @@ window.__ModuleLoader__.load({
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the toolbar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.3'
+    const PLUGIN_VERSION = '0.1.0-alpha.4'
+    /** The client service dsh-modal provides; resolved lazily, never required. */
+    const MODAL_SERVICE = 'modals'
 
     // ---------------------------------------------------------------------
     // Styles
@@ -119,22 +131,8 @@ window.__ModuleLoader__.load({
 .dse-banner button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
 /* The chip's dirty marker (the title seat draws it before the tab's title). */
 .dse-titleDot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-warning-primary,#d29922);margin-right:5px;vertical-align:middle}
-/* The empty editor tab: a workspace file picker that opens the chosen file in
-   this very tab (the tab record is replaced instead of a second tab opening). */
-.dse-pick{height:100%;min-height:0;flex:auto;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
-.dse-pickHead{flex:none;display:flex;align-items:center;gap:6px;padding:8px 10px 6px 12px;min-width:0}
-.dse-pickPath{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#999)}
-.dse-pickBtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);cursor:pointer;padding:0}
-.dse-pickBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12));color:var(--dsw-alias-label-primary,#1f1f1f)}
-.dse-pickScroll{flex:1;min-height:0;overflow-y:auto;padding:0 6px 10px 6px}
-.dse-pickRow{display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;border:0;background:transparent;border-radius:8px;padding:5px 8px;color:inherit;font:inherit;font-size:12.5px;text-align:left;cursor:pointer;min-width:0}
-.dse-pickRow:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.1))}
-.dse-pickRow[aria-disabled=true]{opacity:.5;cursor:default}
-.dse-pickRow[aria-disabled=true]:hover{background:transparent}
-.dse-pickIcon{flex:none;display:inline-flex;color:var(--dsw-alias-label-tertiary,#999)}
-.dse-pickName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dse-pickNote{padding:6px 10px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#999)}
-.dse-pickErr{color:var(--dsw-alias-state-error-primary,#d3382c)}
+/* The blank tab's placeholder path: a new document has no name until it is saved. */
+.dse-filePath.dse-untitled{font-style:italic;color:var(--dsw-alias-label-tertiary,#999)}
 `
     const CSS_TAG = 'dsh-editor/editor.css'
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
@@ -204,16 +202,6 @@ window.__ModuleLoader__.load({
       return value.startsWith('/') || value.startsWith('\\\\') || /^[A-Za-z]:[/\\]/.test(value)
     }
 
-    /** The address for a path as a caller holds it: relative inside the workspace, absolute outside it. */
-    function fileAddressFor(sessionId, cwd, path) {
-      const normalized = String(path).replace(/\\/g, '/')
-      if (!isAbsolutePath(normalized)) return sessionFileAddress(sessionId, normalized)
-      const root = cwd === undefined || cwd === null ? '' : String(cwd).replace(/\\/g, '/').replace(/\/+$/, '')
-      if (root !== '' && normalized === root) return sessionFileAddress(sessionId, '')
-      if (root !== '' && normalized.indexOf(root + '/') === 0) return sessionFileAddress(sessionId, normalized.slice(root.length + 1))
-      return sessionFileAddress(sessionId, normalized)
-    }
-
     /** The lower-cased extension of a path (`''` for none and for dotfiles). */
     function extensionOf(path) {
       const name = String(path).slice(String(path).lastIndexOf('/') + 1)
@@ -276,48 +264,13 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function GlyphFolder() {
-      return h(
-        'svg',
-        { viewBox: '0 0 16 16', width: 14, height: 14, fill: 'currentColor', 'aria-hidden': true },
-        h('path', {
-          d: 'M1.5 3.5A1.5 1.5 0 0 1 3 2h3.1c.4 0 .78.16 1.06.44l.94.94H13a1.5 1.5 0 0 1 1.5 1.5v6.6a1.5 1.5 0 0 1-1.5 1.5H3a1.5 1.5 0 0 1-1.5-1.5v-7.5Z',
-        }),
-      )
-    }
-
-    function GlyphFile() {
-      return h(
-        'svg',
-        { viewBox: '0 0 16 16', width: 14, height: 14, fill: 'none', stroke: 'currentColor', strokeWidth: 1.2, 'aria-hidden': true },
-        h('path', { d: 'M4 1.8h5l3 3v9.4H4z' }),
-        h('path', { d: 'M9 1.8v3h3' }),
-      )
-    }
-
-    function GlyphUp() {
-      return h(
-        'svg',
-        { viewBox: '0 0 16 16', width: 14, height: 14, fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
-        h('path', { d: 'M8 3.5v9' }),
-        h('path', { d: 'M4 7.5 8 3.5l4 4' }),
-      )
-    }
-
-    function GlyphRefresh() {
-      return h(
-        'svg',
-        { viewBox: '0 0 16 16', width: 14, height: 14, fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
-        h('path', { d: 'M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V6H10' }),
-      )
-    }
-
     // ---------------------------------------------------------------------
-    // Per-tab state the chip title reads: whether the open document is dirty.
-    // A body writes it, the title subscribes to it - the tab record itself
-    // carries no place for a body-owned flag.
+    // Per-tab state the chip title reads: whether the open document is dirty,
+    // and the label a surface wants drawn instead of the record's title. A body
+    // writes it, the title subscribes to it - the tab record itself carries no
+    // place for a body-owned flag.
     // ---------------------------------------------------------------------
-    const IDLE_TAB_STATE = { dirty: false }
+    const IDLE_TAB_STATE = { dirty: false, label: '' }
     const tabStates = new Map()
     const titleListeners = new Set()
 
@@ -339,7 +292,22 @@ window.__ModuleLoader__.load({
     function setTabDirty(tabId, dirty) {
       const previous = tabStateOf(tabId)
       if (previous.dirty === dirty) return
-      tabStates.set(tabId, { dirty: dirty })
+      tabStates.set(tabId, { dirty: dirty, label: previous.label })
+      notifyTitles()
+    }
+
+    /**
+     * Set the chip label this surface wants the title seat to draw, for a tab
+     * whose RECORD title is no longer the whole truth: a document saved into an
+     * address this type cannot claim (a preview-owned extension) keeps the tab
+     * record - and therefore the record's "Editor" title - while the file it
+     * now edits is what the chip should name. An empty label restores the
+     * record's own title.
+     */
+    function setTabLabel(tabId, label) {
+      const previous = tabStateOf(tabId)
+      if (previous.label === label) return
+      tabStates.set(tabId, { dirty: previous.dirty, label: label })
       notifyTitles()
     }
 
@@ -469,10 +437,14 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
-    // One open file: the imperative CodeMirror surface behind a tab record.
-    // Built by the body, disposed with the tab.
+    // One open file - or one blank document - the imperative CodeMirror surface
+    // behind a tab record. Built by the body, disposed with the tab.
+    // `hooks.saveAs(text)` is the body's answer to "this document has no file
+    // yet": it names the file through the shared dialog, creates it, and swaps
+    // the tab record for that file's own tab.
     // ---------------------------------------------------------------------
-    function createEditorInstance(rootEl, tabId) {
+    function createEditorInstance(rootEl, tabId, hooks) {
+      const bodyHooks = hooks || {}
       const toolRoot = document.createElement('div')
       toolRoot.className = 'dse-root'
 
@@ -555,7 +527,8 @@ window.__ModuleLoader__.load({
       let cm = null
       let langCompartment = null
       let wrapCompartment = null
-      let file = null // { sessionId, path }
+      let file = null // { sessionId, path, mtimeMs, size }; null = a blank, unnamed document
+      let blank = false // the surface currently holds the tab's own new document
       let targetKey = null // sessionId + path of the loaded/loading file
       let lastSaved = ''
       let dirty = false
@@ -623,30 +596,43 @@ window.__ModuleLoader__.load({
         const isDirty = has && dirty
         fileBar.classList.toggle('dse-dirty', isDirty)
         dirtyText.textContent = isDirty ? 'Modified' : ''
-        fileBar.title = file ? file.path : ''
-        saveBtn.disabled = !has || !isDirty || saving
-        findInput.disabled = !has || !cm
-        saveBtn.title = !has ? 'Open a text file first' : isDirty ? 'Save this file to disk (Ctrl+S)' : 'Nothing to save'
+        fileBar.title = has ? file.path : 'Not saved yet'
+        filePath.classList.toggle('dse-untitled', !has)
+        filePath.textContent = has ? file.path : (blank || cm ? 'Untitled' : '')
+        // An unnamed document is always saveable once it has a surface: Save is
+        // what names it. A file that is already on disk is saveable only while
+        // it differs from what is on disk.
+        saveBtn.disabled = saving || (has ? !isDirty : !cm)
+        findInput.disabled = !cm
+        saveBtn.textContent = has ? 'Save' : 'Save\u2026'
+        saveBtn.title = !has ? 'Name this file and write it into the conversation folder (Ctrl+S)' : isDirty ? 'Save this file to disk (Ctrl+S)' : 'Nothing to save'
       }
 
       function onDocChanged() {
-        if (!cm || !file) return
-        markDirty(cm.state.doc.toString() !== lastSaved)
+        if (!cm) return
+        // A blank document has no saved text to compare against; any content at
+        // all is work the user would lose, so it counts as modified.
+        markDirty(file ? cm.state.doc.toString() !== lastSaved : cm.state.doc.toString() !== '')
         updateDirtyUi()
       }
 
       // Debounced equality check keeps the dirty flag honest after undoing back
       // to the saved text without comparing every keystroke.
       const recheckDirty = debounce(() => {
-        if (!cm || !file || disposed) return
-        if (cm.state.doc.toString() === lastSaved && dirty) {
+        if (!cm || disposed) return
+        const settled = file ? cm.state.doc.toString() === lastSaved : cm.state.doc.toString() === ''
+        if (settled && dirty) {
           markDirty(false)
           updateDirtyUi()
         }
       }, 250)
 
       function saveNow(force) {
-        if (!cm || !file || saving) return
+        if (!cm || saving) return
+        if (!file) {
+          requestSaveAs()
+          return
+        }
         if (!force && !dirty) return
         const target = file
         const text = cm.state.doc.toString()
@@ -718,6 +704,64 @@ window.__ModuleLoader__.load({
             saving = false
             setStatus('Save failed', 'err')
             showBanner(err && err.message ? err.message : 'Could not reach the editor service.', [])
+            updateDirtyUi()
+          })
+      }
+
+      /**
+       * Save the blank document: hand the text to the body, which names the file
+       * through the shared dialog, creates it, and swaps this tab for the file's
+       * own tab. A body without a `saveAs` hook (or a cancelled dialog) leaves
+       * the document exactly as it was.
+       */
+      function requestSaveAs() {
+        if (!cm || saving) return
+        if (typeof bodyHooks.saveAs !== 'function') {
+          setStatus('Save failed', 'err')
+          showBanner('This editor tab cannot name a new file (the dialog service is unavailable).', [])
+          return
+        }
+        const text = cm.state.doc.toString()
+        saving = true
+        setStatus('Naming\u2026')
+        updateDirtyUi()
+        Promise.resolve()
+          .then(() => bodyHooks.saveAs(text))
+          .then((created) => {
+            if (disposed) return
+            saving = false
+            if (!created) {
+              // Cancelled: keep the typed document and its dirty marker.
+              setStatus('')
+              updateDirtyUi()
+              return
+            }
+            if (created.adopt === true && created.file) {
+              // The body kept the file in this surface (its extension belongs to
+              // a shipped preview, or the record has no tab actions), so later
+              // saves are ordinary in-place saves and the chip names the file.
+              file = created.file
+              blank = false
+              targetKey = file.sessionId + '\u0000' + file.path
+              lastSaved = text
+              markDirty(false)
+              applyLanguage(file.path)
+              setTabLabel(tabId, basenameOf(file.path))
+              filePath.textContent = file.path
+              filePath.title = file.path
+              filePath.classList.remove('dse-untitled')
+              flashStatus('Saved ' + fmtTime(new Date()))
+              clearBanner()
+            }
+            // `created.replaced`: the body swapped the tab record, so this
+            // surface is about to be disposed with nothing left to update.
+            updateDirtyUi()
+          })
+          .catch((err) => {
+            if (disposed) return
+            saving = false
+            setStatus('Save failed', 'err')
+            showBanner(err && err.message ? err.message : 'Could not create the new file.', [])
             updateDirtyUi()
           })
       }
@@ -856,6 +900,7 @@ window.__ModuleLoader__.load({
             return
           }
           ensureEditor()
+          blank = false
           file = {
             sessionId: target.sessionId,
             path: payload.path || target.path,
@@ -866,6 +911,7 @@ window.__ModuleLoader__.load({
           markDirty(false)
           setDocument(lastSaved)
           applyLanguage(file.path)
+          setTabLabel(tabId, basenameOf(file.path))
           filePath.textContent = file.path
           filePath.title = file.path
           showState('edit')
@@ -883,9 +929,49 @@ window.__ModuleLoader__.load({
         }
       }
 
+      /**
+       * Show the tab's own new document: an empty surface with no file behind
+       * it. Nothing is read from disk, and re-entering the already-blank
+       * surface changes nothing (a re-navigation must not throw away typing).
+       */
+      async function openBlank(force) {
+        if (disposed) return
+        if (blank && cm && !force) {
+          try {
+            cm.focus()
+          } catch (e) {}
+          return
+        }
+        clearBanner()
+        try {
+          await ensureCmEngine()
+          CM = CM || window.DSHEditorCM
+          if (disposed) return
+          ensureEditor()
+          blank = true
+          targetKey = null
+          file = null
+          lastSaved = ''
+          markDirty(false)
+          setDocument('')
+          applyLanguage('')
+          setTabLabel(tabId, '')
+          showState('edit')
+          setStatus('')
+          updateDirtyUi()
+          try {
+            cm.focus()
+          } catch (e) {}
+        } catch (err) {
+          if (disposed) return
+          showState('error', 'Editor unavailable', err && err.message ? err.message : String(err))
+          updateDirtyUi()
+        }
+      }
+
       // ---- find-in-file wiring (the toolbar search drives CodeMirror's own) ----
       const runFind = debounce(() => {
-        if (!cm || !CM || !file) return
+        if (!cm || !CM) return
         const value = findInput.value
         if (!value) {
           try {
@@ -922,8 +1008,9 @@ window.__ModuleLoader__.load({
       updateDirtyUi()
 
       return {
+        /** Show one file, or the tab's own blank document when `target` is null. */
         open(target) {
-          return openFile(target, false)
+          return target ? openFile(target, false) : openBlank(false)
         },
         dispose() {
           disposed = true
@@ -944,164 +1031,175 @@ window.__ModuleLoader__.load({
     // The tab bodies.
     // ---------------------------------------------------------------------
 
-    /** Order one directory's entries for display: directories first, then by name. */
-    function orderEntries(entries) {
-      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-      return [...entries].sort((left, right) => {
-        const group = Number(right.type === 'directory') - Number(left.type === 'directory')
-        return group !== 0 ? group : collator.compare(left.name, right.name)
-      })
+    /**
+     * The file name the dialog asks for is a workspace-relative path whose last
+     * segment states an extension: naming the extension is part of the gesture,
+     * and a file called `notes` is almost never what was meant. A dotfile
+     * (`.gitignore`) is the one accepted exception.
+     * @returns the problem to show inline, or `''` when the name is usable.
+     */
+    function validateNewFilePath(value) {
+      const text = String(value === undefined || value === null ? '' : value).trim()
+      if (text === '') return 'Enter a file name.'
+      if (text.length > 200) return 'That file name is too long.'
+      const normalized = text.replace(/\\/g, '/')
+      if (normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)) return 'Use a path inside the conversation folder, not an absolute one.'
+      const segments = normalized.split('/')
+      for (const segment of segments) {
+        if (segment === '' || segment === '.' || segment === '..') return 'The path cannot contain empty, "." or ".." segments.'
+      }
+      const name = segments[segments.length - 1]
+      const dotfile = name.length > 1 && name.charAt(0) === '.' && name.indexOf('.', 1) < 0
+      if (!dotfile && !/\.[^./\\]+$/.test(name)) return 'Add a file extension, for example .md or .txt.'
+      return ''
     }
 
-    function childPath(parent, name) {
-      return String(parent).replace(/[/\\]+$/, '') + '/' + name
+    /** A first guess at the new document's name, read from what has been typed. */
+    function suggestedFileName(text) {
+      const trimmed = String(text || '').trim()
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'untitled.json'
+      if (/^#{1,6}\s/.test(trimmed)) return 'untitled.md'
+      return 'untitled.txt'
     }
 
-    function failureText(error) {
-      if (!error) return 'Could not list this folder.'
-      if (typeof error === 'string') return error
-      if (error.code === 'workspace-file/not-found') return 'This folder no longer exists.'
-      if (error.code === 'workspace-file/outside-workspace') return 'This folder is outside the workspace.'
-      if (error.code === 'workspace-file/not-directory') return 'This path is not a folder.'
-      return error.message || error.code || 'Could not list this folder.'
+    /** One create failure, phrased for the dialog. */
+    function createFailureText(status, payload, path) {
+      const error = payload && payload.error ? payload.error : null
+      const code = error && error.code ? error.code : ''
+      if (code === 'EXISTS') return 'A file named "' + path + '" already exists in that folder.'
+      if (code === 'NO_FOLDER') return 'The folder for "' + path + '" does not exist.'
+      if (code === 'OUTSIDE_WORKSPACE') return 'That path is outside the conversation folder.'
+      if (code === 'TOO_LARGE') return 'The file would be too large to save.'
+      if (code === 'NO_WORKSPACE') return 'The conversation folder is not available right now.'
+      if (error && error.message) return error.message
+      return 'Could not create the file (HTTP ' + status + ').'
     }
-
-    const NO_SESSIONS = () => undefined
 
     /**
-     * The empty editor tab: browse the session workspace and hand the chosen
-     * file to THIS tab record (`replaceTab`), so picking a file turns the empty
-     * tab into that file's editor instead of leaving it behind.
+     * Name and create the document a blank editor tab holds, then hand the tab
+     * over to the created file: the tab record is replaced (`replaceTab`) so the
+     * chip title becomes the file name and every later save is an in-place save.
+     *
+     * The dialog does the naming AND owns the failure: `submit` performs the
+     * create while the dialog stays open, so a taken name is reported inside it
+     * and the typed name survives. Without the shared dialog service (dsh-modal
+     * not mounted) the browser's own prompt keeps the editor usable.
+     *
+     * @param options - `{ sessionId, tab, text, modals }`.
+     * @returns `null` when cancelled; otherwise what the tab body should do next.
      */
-    function FilePicker(props) {
-      const tab = props.tab
-      const sessionId = props.sessionId
-      const listDir = props.listDir
-      // Called unconditionally (a conditional hook would change the call order
-      // if the framework ever supplied it late).
-      const useSessions = typeof props.useSessions === 'function' ? props.useSessions : NO_SESSIONS
-      const cwd = useSessions((sessions) => {
-        if (!sessions || !sessions.byId) return undefined
-        const summary = sessions.byId[sessionId]
-        return summary ? summary.cwd : undefined
-      })
-      const [dir, setDir] = useState(null)
-      const [state, setState] = useState({ phase: 'loading', entries: [], error: null, truncated: false })
+    async function createNewFile(options) {
+      const sessionId = options.sessionId
+      const tab = options.tab
+      const text = options.text
+      const modals = options.modals
 
-      useEffect(() => {
-        if (dir === null && typeof cwd === 'string' && cwd !== '') setDir(cwd)
-      }, [cwd, dir])
+      const put = async (path) => {
+        const trimmed = String(path).trim().replace(/\\/g, '/')
+        const res = await fetch(FILE_ROUTE, {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ session: sessionId, path: trimmed, text: text, create: true }),
+        })
+        let payload = null
+        try {
+          payload = await res.json()
+        } catch (e) {}
+        if (!res.ok || !payload || !payload.ok) throw new Error(createFailureText(res.status, payload, trimmed))
+        return typeof payload.path === 'string' && payload.path !== '' ? payload.path : trimmed
+      }
 
-      useEffect(() => {
-        if (dir === null || !sessionId || typeof listDir !== 'function') return undefined
-        let alive = true
-        setState({ phase: 'loading', entries: [], error: null, truncated: false })
-        Promise.resolve()
-          .then(() => listDir(sessionId, dir, tab.signal))
-          .then((result) => {
-            if (!alive) return
-            if (!result || result.ok === false) {
-              setState({ phase: 'error', entries: [], error: failureText(result && result.error), truncated: false })
-              return
-            }
-            const value = result.value || result
-            const entries = Array.isArray(value.entries) ? value.entries : []
-            setState({ phase: 'ready', entries: orderEntries(entries), error: null, truncated: !!value.truncated })
-          })
-          .catch((err) => {
-            if (!alive) return
-            setState({ phase: 'error', entries: [], error: err && err.message ? err.message : String(err), truncated: false })
-          })
-        return () => {
-          alive = false
+      let name = null
+      if (modals && typeof modals.open === 'function') {
+        const values = await modals.open({
+          title: 'Save new file',
+          message: 'The file is created inside this conversation\u2019s workspace folder. Type its name - extension included - relative to that folder.',
+          fields: [
+            {
+              name: 'path',
+              label: 'File name (with extension)',
+              value: suggestedFileName(text),
+              placeholder: 'notes.md',
+              hint: 'A subfolder works too, for example src/app.ts; the folder must already exist.',
+              mono: true,
+              required: true,
+            },
+          ],
+          validate: (input) => validateNewFilePath(input.path),
+          submit: async (input) => ({ path: await put(input.path) }),
+          confirmLabel: 'Save',
+          busyLabel: 'Saving\u2026',
+        })
+        if (values === null) return null
+        name = values.path
+      } else {
+        // eslint-disable-next-line no-alert
+        const typed = window.prompt('Save as (relative to the conversation folder, extension included)', suggestedFileName(text))
+        if (typed === null) return null
+        const problem = validateNewFilePath(typed)
+        if (problem !== '') throw new Error(problem)
+        name = await put(typed)
+      }
+
+      const address = sessionFileAddress(sessionId, name)
+      // The file becomes its own tab only when THIS type would claim it - the
+      // same ranking a click on the file in the Files tree uses, so the two
+      // routes agree. An extension a shipped preview owns (Markdown, HTML, an
+      // image, a PDF) is left in this editor surface on purpose: the user asked
+      // for an editor, and handing the tab to a preview would take the file out
+      // of the only place that can edit it.
+      if (canOpenFile(address) && tab && tab.actions && typeof tab.actions.openResource === 'function') {
+        try {
+          tab.actions.openResource(address, { replaceTab: tab.id })
+          return { replaced: true, path: name }
+        } catch (err) {
+          // No registered type claims the address after all: keep the file here
+          // rather than losing the tab or the save.
         }
-      }, [dir, sessionId])
-
-      const here = typeof dir === 'string' ? dir : ''
-      const root = typeof cwd === 'string' && cwd !== '' ? cwd.replace(/[/\\]+$/, '') : ''
-      const shortPath = root !== '' && here.indexOf(root) === 0 ? here.slice(root.length).replace(/^[/\\]+/, '') : here
-
-      const rows = []
-      if (root !== '' && here !== root && here !== '') {
-        rows.push(
-          h(
-            'button',
-            { key: '..', type: 'button', className: 'dse-pickRow', onClick: () => setDir(here.replace(/[/\\][^/\\]*$/, '') || root) },
-            h('span', { className: 'dse-pickIcon' }, GlyphUp()),
-            h('span', { className: 'dse-pickName' }, '..'),
-          ),
-        )
       }
-      for (const entry of state.entries) {
-        const isDir = entry.type === 'directory'
-        const path = childPath(here, entry.name)
-        rows.push(
-          h(
-            'button',
-            {
-              key: (isDir ? 'd:' : 'f:') + entry.name,
-              type: 'button',
-              className: 'dse-pickRow',
-              'aria-disabled': !isDir && entry.type !== 'file' ? 'true' : undefined,
-              title: path,
-              onClick: () => {
-                if (isDir) {
-                  setDir(path)
-                  return
-                }
-                if (entry.type !== 'file') return
-                if (tab.actions && typeof tab.actions.openResource === 'function') {
-                  tab.actions.openResource(fileAddressFor(sessionId, root, path), { replaceTab: tab.id })
-                }
-              },
-            },
-            h('span', { className: 'dse-pickIcon' }, isDir ? GlyphFolder() : GlyphFile()),
-            h('span', { className: 'dse-pickName' }, entry.name),
-          ),
-        )
-      }
-
-      return h(
-        'div',
-        { className: 'dse-pick' },
-        h(
-          'div',
-          { className: 'dse-pickHead' },
-          h('span', { className: 'dse-pickPath', title: here }, shortPath === '' ? 'Workspace' : shortPath),
-          h(
-            'button',
-            {
-              type: 'button',
-              className: 'dse-pickBtn',
-              title: 'Reload this folder',
-              'aria-label': 'Reload this folder',
-              onClick: () => setDir(typeof dir === 'string' ? dir : null),
-            },
-            GlyphRefresh(),
-          ),
-        ),
-        h(
-          'div',
-          { className: 'dse-pickScroll' },
-          state.phase === 'loading' ? h('div', { className: 'dse-pickNote' }, 'Listing\u2026') : null,
-          state.phase === 'error' ? h('div', { className: 'dse-pickNote dse-pickErr' }, state.error || 'Could not list this folder.') : null,
-          state.phase === 'ready' && rows.length === 0 ? h('div', { className: 'dse-pickNote' }, 'Nothing to open here.') : null,
-          state.phase === 'ready' ? rows : null,
-          state.phase === 'ready' && state.truncated ? h('div', { className: 'dse-pickNote' }, 'This folder has more entries than the listing returns.') : null,
-        ),
-      )
+      // The surface adopts the file: the document stays open, the chip takes the
+      // file's name, and later saves go in place.
+      return { adopt: true, path: name, file: { sessionId: sessionId, path: name, mtimeMs: null, size: null } }
     }
 
-    /** One file's editor: the CodeMirror surface behind a file tab record. */
+    /**
+     * One tab's editor: the CodeMirror surface behind a file tab record, or
+     * behind the tab's own blank document when `file` is null.
+     *
+     * The imperative surface is created once per tab id and lives until the tab
+     * closes, so it is handed a STABLE `saveAs` hook that reads the current tab
+     * record on every call: saving the blank document names it, and the tab
+     * record is then swapped for the created file's own tab.
+     */
     function EditorView(props) {
       const hostRef = useRef(null)
       const instanceRef = useRef(null)
+      const tab = props.tab
+      const sessionId = props.sessionId
       const file = props.file
+      const getModals = props.getModals
+      const fileKey = file ? file.sessionId + '\u0000' + file.path : ''
+
+      const saveAsRef = useRef(null)
+      saveAsRef.current = (text) =>
+        createNewFile({
+          sessionId: sessionId,
+          tab: tab,
+          text: text,
+          modals: typeof getModals === 'function' ? getModals() : undefined,
+        })
+      const hooksRef = useRef(null)
+      if (hooksRef.current === null) {
+        hooksRef.current = {
+          saveAs: (text) => saveAsRef.current(text),
+        }
+      }
 
       useEffect(() => {
-        const instance = createEditorInstance(hostRef.current, props.tabId)
+        const instance = createEditorInstance(hostRef.current, props.tabId, hooksRef.current)
         instanceRef.current = instance
-        instance.open({ sessionId: file.sessionId, path: file.path })
+        instance.open(file ? { sessionId: file.sessionId, path: file.path } : null)
         return () => {
           instanceRef.current = null
           instance.dispose()
@@ -1109,51 +1207,48 @@ window.__ModuleLoader__.load({
       }, [props.tabId])
 
       // A re-navigation of the same record (a second open of the address) may
-      // point somewhere else; the instance ignores the file it already shows.
+      // point somewhere else; the instance ignores the file it already shows,
+      // and re-entering the blank document never resets what was typed.
       useEffect(() => {
         const instance = instanceRef.current
-        if (instance) instance.open({ sessionId: file.sessionId, path: file.path })
-      }, [file.sessionId, file.path, props.revision])
+        if (instance) instance.open(file ? { sessionId: file.sessionId, path: file.path } : null)
+      }, [fileKey, props.revision])
 
       return h('div', { className: 'dse-root', ref: hostRef, 'data-editor-tab': props.tabId })
     }
 
     /**
      * The tab body dispatched by `sidebar.right.pane.tab`: a file address gets
-     * the editor, the page address gets the picker.
+     * that file's editor, and the tab's own page address gets a blank document.
      */
     function EditorBody(props) {
       const info = props.useTabInfo()
       const tab = info.tab
-      const file = parseFileAddress(tab.contentId)
-      if (file && file.scope === 'session' && file.path !== '') {
-        return h(EditorView, {
-          key: tab.id,
-          tabId: tab.id,
-          file: file,
-          revision: tab.navigation.revision,
-        })
-      }
-      return h(FilePicker, {
+      const parsed = parseFileAddress(tab.contentId)
+      const file = parsed && parsed.scope === 'session' && parsed.path !== '' ? parsed : null
+      return h(EditorView, {
         key: tab.id,
+        tabId: tab.id,
         tab: tab,
+        file: file,
         sessionId: props.sessionId,
-        listDir: props.listDir,
-        useSessions: props.useSessions,
+        getModals: props.getModals,
+        revision: tab.navigation.revision,
       })
     }
 
-    /** The chip title: the captured basename, plus a dot while the file is dirty. */
+    /** The chip title: the label this surface set, else the captured title, plus a dot while dirty. */
     function EditorTitle(props) {
       const info = props.useTabInfo()
       const tab = info.tab
       const state = React.useSyncExternalStore(subscribeTabState, () => tabStateOf(tab.id))
-      if (!state.dirty) return h('span', null, tab.title)
+      const text = state.label === '' ? tab.title : state.label
+      if (!state.dirty) return h('span', null, text)
       return h(
         React.Fragment,
         null,
         h('span', { className: 'dse-titleDot', 'aria-hidden': true }),
-        h('span', null, tab.title),
+        h('span', null, text),
       )
     }
 
@@ -1176,7 +1271,7 @@ window.__ModuleLoader__.load({
           {
             order: 20,
             title: () => 'Editor',
-            description: () => 'Open a text or code file and edit it here',
+            description: () => 'Start a blank text or code file and save it',
             icon: EditorGlyph,
           },
         ],
@@ -1186,37 +1281,20 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     // Plugin entry
     // ---------------------------------------------------------------------
-    const inject = ['slots', 'sidebarRightTabs', 'remote.workspaceFiles']
+    const inject = ['slots', 'sidebarRightTabs']
 
     function apply(ctx) {
-      // The namespace is a service that mounts when its gateway contribution
-      // lands, so re-resolve it on every listing instead of holding the first
-      // answer.
-      function refsNow() {
+      /**
+       * The shared dialog service (dsh-modal), re-resolved on every use instead
+       * of held: it is a service that mounts when its own row lands, and the
+       * editor must not depend on it existing. Without it the save dialog falls
+       * back to the browser's own prompt.
+       */
+      function modalsNow() {
         try {
-          const named = ctx.get ? ctx.get('remote.workspaceFiles') : undefined
-          if (named && typeof named.list === 'function') return named
-        } catch (e) {}
-        try {
-          const remote = ctx.get ? ctx.get('remote') : undefined
-          const onRemote = remote && remote.workspaceFiles
-          if (onRemote && typeof onRemote.list === 'function') return onRemote
-        } catch (e) {}
-        return undefined
-      }
-
-      function listDir(sessionId, path, signal) {
-        const refs = refsNow()
-        if (!refs) {
-          return Promise.resolve({
-            ok: false,
-            error: { code: 'NO_REMOTE', message: 'The workspace file service is not available yet.' },
-          })
-        }
-        try {
-          return Promise.resolve(refs.list(sessionId, path, signal))
-        } catch (err) {
-          return Promise.resolve({ ok: false, error: { code: 'LIST_FAILED', message: err && err.message ? err.message : String(err) } })
+          return ctx.get ? ctx.get(MODAL_SERVICE) : undefined
+        } catch (e) {
+          return undefined
         }
       }
 
@@ -1229,7 +1307,7 @@ window.__ModuleLoader__.load({
                 {
                   name: 'sidebar.right.pane.tab',
                   key: EDITOR_ID,
-                  inject: () => ({ listDir: listDir }),
+                  inject: () => ({ getModals: modalsNow }),
                 },
                 EditorBody,
               ),

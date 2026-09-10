@@ -9,7 +9,7 @@
  * mechanism the shipped session-log-export plugin uses for its ZIP download:
  *
  *   GET  /api/dsh-editor/file?session=<id>&path=<rel>   read one text file
- *   PUT  /api/dsh-editor/file                           save one text file
+ *   PUT  /api/dsh-editor/file                           save (or create) one text file
  *   GET  /api/dsh-editor/vendor                         vendored CodeMirror 6 bundle
  *
  * The session id is what the browser tab already carries (its address is
@@ -32,6 +32,11 @@
  *   - bounded:      files over 2 MiB are refused instead of buffered;
  *   - atomic write: saves go to a private temp name in the same directory and
  *     are renamed over the target, so a crash never leaves a half-written file;
+ *   - create-only:  a PUT carrying `create: true` writes a NEW file at a
+ *     workspace-relative path whose parent folder already exists inside the
+ *     workspace. The target must not exist (409 EXISTS) and the publish is
+ *     create-exclusive, so a create never overwrites a file the user did not
+ *     open - neither the one they typed nor one that appeared meanwhile;
  *   - optimistic:   the client echoes the mtime/size it opened with; a save
  *     whose on-disk stat no longer matches is refused (HTTP 409) instead of
  *     silently clobbering a concurrent change.
@@ -39,7 +44,7 @@
  * The plugin reads/writes exactly what its own GUI asks for (the owner's
  * session folders), so no sandbox escalation or approval flow is involved.
  */
-import { promises as fsp } from 'node:fs'
+import { promises as fsp, constants as fsConstants } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -164,6 +169,107 @@ async function resolveInside(cwd, rel) {
   return fileReal
 }
 
+/**
+ * Resolve a workspace-relative path for a file that does NOT exist yet.
+ *
+ * The parent folder must already exist inside the workspace and is
+ * realpath-checked, so a symlinked folder cannot smuggle the write outside the
+ * conversation folder; nothing here creates directories. The target itself
+ * must not exist: this route creates, it never overwrites a file the user did
+ * not open.
+ *
+ * @param cwd - the session workspace root (absolute).
+ * @param rel - the new file's path, relative to the workspace root.
+ * @returns {Promise<string>} the absolute target path.
+ */
+async function resolveNewInside(cwd, rel) {
+  if (typeof cwd !== 'string' || cwd.length === 0) {
+    throw httpError(400, 'BAD_REQUEST', 'A workspace folder is required.')
+  }
+  if (typeof rel !== 'string' || rel.length === 0) {
+    throw httpError(400, 'BAD_REQUEST', 'A path is required.')
+  }
+  const normalized = rel.replaceAll('\\', '/')
+  if (normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)) {
+    throw httpError(400, 'BAD_REQUEST', 'The path must be relative to the conversation folder.')
+  }
+  const segments = normalized.split('/')
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    throw httpError(400, 'BAD_REQUEST', 'The path cannot contain empty, "." or ".." segments.')
+  }
+  const name = segments.pop()
+  if (name === undefined || name.length === 0) {
+    throw httpError(400, 'BAD_REQUEST', 'A file name is required.')
+  }
+  let rootReal
+  try {
+    rootReal = await fsp.realpath(path.resolve(cwd))
+  } catch (err) {
+    throw httpError(400, 'NO_FOLDER', 'The conversation folder does not exist on disk.', err)
+  }
+  const rootPrefix = rootReal.endsWith(path.sep) ? rootReal : rootReal + path.sep
+  const parentAbs = path.resolve(rootReal, ...segments)
+  if (parentAbs !== rootReal && !parentAbs.startsWith(rootPrefix)) {
+    throw httpError(403, 'OUTSIDE_WORKSPACE', 'The path escapes the conversation folder.')
+  }
+  let parentReal
+  try {
+    parentReal = await fsp.realpath(parentAbs)
+  } catch (err) {
+    if (err && err.code === 'ENOENT') {
+      throw httpError(404, 'NO_FOLDER', 'The folder for this file does not exist in the conversation folder.', err)
+    }
+    throw httpError(500, 'IO_ERROR', 'Could not resolve the folder on disk.', err)
+  }
+  if (parentReal !== rootReal && !parentReal.startsWith(rootPrefix)) {
+    throw httpError(403, 'OUTSIDE_WORKSPACE', 'The path escapes the conversation folder.')
+  }
+  let parentStats
+  try {
+    parentStats = await fsp.stat(parentReal)
+  } catch (err) {
+    throw httpError(500, 'IO_ERROR', 'Could not read the folder on disk.', err)
+  }
+  if (!parentStats.isDirectory()) {
+    throw httpError(400, 'NOT_FOLDER', 'The parent path is not a folder.')
+  }
+  const target = path.join(parentReal, name)
+  try {
+    await fsp.stat(target)
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return target
+    throw httpError(500, 'IO_ERROR', 'Could not check the target path on disk.', err)
+  }
+  throw httpError(409, 'EXISTS', 'A file with this name already exists in the conversation folder.')
+}
+
+/**
+ * Publish a freshly written temp file as a NEW file without ever replacing an
+ * existing one: a hard link is atomic and refuses an existing target, and the
+ * create-exclusive copy keeps the same guarantee on a filesystem without hard
+ * links. A target that appeared since the name was checked answers 409.
+ *
+ * @param tmp - the private temp file holding the bytes (same directory).
+ * @param target - the new file's absolute path.
+ */
+async function publishNew(tmp, target) {
+  const exists = httpError(409, 'EXISTS', 'A file with this name already exists in the conversation folder.')
+  try {
+    await fsp.link(tmp, target)
+    return
+  } catch (err) {
+    if (err && err.code === 'EEXIST') throw exists
+    const unsupported = err && (err.code === 'EPERM' || err.code === 'EACCES' || err.code === 'ENOSYS' || err.code === 'EXDEV' || err.code === 'EPLATFORM')
+    if (!unsupported) throw err
+  }
+  try {
+    await fsp.copyFile(tmp, target, fsConstants.COPYFILE_EXCL)
+  } catch (err) {
+    if (err && err.code === 'EEXIST') throw exists
+    throw err
+  }
+}
+
 /** A coarse but reliable text probe: strict UTF-8 and no NUL bytes. */
 function decodeText(buffer) {
   let text
@@ -232,7 +338,7 @@ async function handleFile(ctx, request) {
       })
     }
 
-    // PUT — save. { session, path, text, expected?: { mtimeMs, size } }
+    // PUT — save or create. { session, path, text, expected?: { mtimeMs, size }, create?: true }
     let payload
     try {
       payload = await request.json()
@@ -245,7 +351,39 @@ async function handleFile(ctx, request) {
     if (text === null) {
       return fail(400, 'BAD_REQUEST', 'Expected a text field.')
     }
+    const content = Buffer.from(text, 'utf8')
+    if (content.byteLength > MAX_TEXT_BYTES) {
+      throw httpError(413, 'TOO_LARGE', 'The file would be larger than ' + Math.round(MAX_TEXT_BYTES / 1024 / 1024) + ' MiB and was not saved.')
+    }
     const cwd = await sessionRoot(ctx, sessionId)
+
+    // A create names a file that does not exist yet: the parent folder is what
+    // must be verified, and the publish below never replaces anything.
+    if (payload.create === true) {
+      const created = await resolveNewInside(cwd, rel)
+      const tmp = created + '.dsh-editor-' + process.pid + '-' + Date.now() + '.tmp'
+      try {
+        await fsp.writeFile(tmp, content, { flag: 'wx' })
+      } catch (err) {
+        await fsp.rm(tmp, { force: true }).catch(() => {})
+        throw httpError(500, 'IO_ERROR', 'Could not write the new file on disk.', err)
+      }
+      try {
+        await publishNew(tmp, created)
+      } finally {
+        await fsp.rm(tmp, { force: true }).catch(() => {})
+      }
+      const fresh = await fsp.stat(created)
+      return json(200, {
+        ok: true,
+        path: rel,
+        bytes: content.byteLength,
+        version: versionOf(fresh),
+        mtimeMs: fresh.mtimeMs,
+        size: fresh.size,
+      })
+    }
+
     const target = await resolveInside(cwd, rel)
     let before
     try {
@@ -255,10 +393,6 @@ async function handleFile(ctx, request) {
     }
     if (!before.isFile()) {
       throw httpError(400, 'NOT_FILE', 'The path is not a regular file.')
-    }
-    const content = Buffer.from(text, 'utf8')
-    if (content.byteLength > MAX_TEXT_BYTES) {
-      throw httpError(413, 'TOO_LARGE', 'The file would be larger than ' + Math.round(MAX_TEXT_BYTES / 1024 / 1024) + ' MiB and was not saved.')
     }
 
     // Optimistic concurrency: the client opened version V; refuse to clobber a

@@ -1,0 +1,25 @@
+{
+  "name": "dsh-modal",
+  "version": "0.1.0-alpha.1",
+  "description": "Modal: the pack's shared dialog surface for the dsh-vn-plugins Web GUI. A body-level overlay any client plugin reaches through ctx.get('modals') - open/alert/confirm/prompt, with async submit work that keeps the dialog open and shows the failure inline. Alpha.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "license": "MIT"
+}

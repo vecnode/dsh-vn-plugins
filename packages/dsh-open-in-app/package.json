@@ -1,0 +1,31 @@
+{
+  "name": "dsh-open-in-app",
+  "version": "0.1.0-alpha.1",
+  "description": "Open In: the pack's own cross-platform file-browser launcher for the dsh-vn-plugins Web GUI. Forks the shipped @deepseek-ai/dsh-client-ui-open-in-app browser bundle so the File Explorer / Finder / Files menu entries post to a route this package owns, which opens the OS's file browser directly (explorer.exe, open, xdg-open, WSL-aware) instead of the shell's open verb. Alpha.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-session"
+      ]
+    }
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,10 @@
+# dsh-modal bundle layer (alpha).
+#
+# One extra row owns the pack's shared dialog service: the browser half
+# provides `modals` on the client context (ctx.reflect.provide) and mounts the
+# body-level overlay host, so any other client plugin - inside this pack or in
+# a deployment - asks for it with ctx.get('modals'). Nothing shipped is
+# patched: the overlay portals into document.body and does not occupy a slot.
+- insert:
+    - id: modal
+      name: 'dsh-modal'

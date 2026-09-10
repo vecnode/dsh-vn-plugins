@@ -1,13 +1,15 @@
-# dsh-editor (alpha.3)
+# dsh-editor (alpha.4)
 
 **Editor** is a **tab type for the pack's right bar** (`dsh-rightbar` — the
 right-hand column of the DeepSeek Harness web GUI, beside the **Start** page and
 the **Files** tab that `dsh-rightbar-files` provides). It opens **text files
 only** (strict UTF-8, binary is refused), edits them with a vendored
-**CodeMirror 6**, and saves them back to disk. It is a **sub-plugin**: it holds
-no bar code, and its host-side half owns the pack's only HTTP routes. Alpha.
+**CodeMirror 6**, starts **blank documents** from the tab strip's "+", names and
+creates new files through the shared **`dsh-modal`** dialog, and saves them back
+to disk. It is a **sub-plugin**: it holds no bar code, and its host-side half
+owns the pack's own HTTP routes. Alpha.
 
-## What alpha.3 does
+## What alpha.4 does
 
 - **Registered into the right bar** through the bar's tab-type registry
   (`ctx.sidebarRightTabs.register`, provided by `dsh-rightbar`): id
@@ -23,19 +25,38 @@ no bar code, and its host-side half owns the pack's only HTTP routes. Alpha.
     `absolute/…` addresses).
   So clicking a `.ts`, `.json`, `.py`, `.txt` … in the Files tree opens it in the
   editor; clicking a `.md` or a `.png` opens the shipped preview as before.
-- **Creatable from "+".** The tab strip's add control opens the **Start** page;
-  this type contributes a guide entry ("Editor"), so picking it creates an empty
-  editor tab whose body is a **workspace file picker** — choosing a file there
-  opens it in that same tab (`replaceTab`), not in a second one.
+- **"+" → Editor opens a BLANK document.** Picking the guide entry creates an
+  editor tab on an empty, unnamed document: nothing is read from disk and the
+  tab holds no workspace browser. The file bar reads *Untitled* and **Save** is
+  always offered.
+- **Saving a blank document names it.** Save (or Ctrl+S) opens the pack's shared
+  dialog (`dsh-modal`'s `modals` service) asking for the **file name with its
+  extension** — a relative path such as `notes.md` or `src/app.ts`, created in
+  **this conversation's workspace folder** (the same place the tab was opened
+  from); the folder must already exist. The dialog validates the name (an
+  extension is required, dotfiles excepted; no absolute or `..` paths), shows
+  the server's answer **inside the dialog** when the name is taken
+  (`409 EXISTS`) and keeps what was typed. On success:
+  - an ordinary text/code file (`.txt`, `.ts`, `.json`, `.py`, …) becomes its own
+    tab (`replaceTab`), so the chip shows the file name and every later save is
+    an ordinary in-place save — exactly as if the file had been clicked in the
+    Files tree;
+  - an extension a shipped preview owns (`.md`, `.html`, an image, a PDF, …)
+    **stays in the editor**: the chip takes the file's name through the tab
+    title store, and later saves go in place. The tab is deliberately not handed
+    to the preview, because the preview cannot edit the file and this tab is the
+    only place that can.
+  Without `dsh-modal` mounted the dialog falls back to the browser's own prompt.
 - **Edit**: CodeMirror 6 with line numbers, history/undo, bracket matching,
   autocomplete, find-in-file, and syntax highlighting for js/ts/jsx/tsx, json,
   markdown, python, html, css, yaml. Line-wrapping for prose-ish files. The
   editor always renders on the dark oneDark palette (the Sidebar's panel uses
   the dark design tokens). The engine is **lazy**: the vendored classic bundle is
   fetched once from `/api/dsh-editor/vendor` the first time a file opens.
-- **Toolbar**: a find-in-file search input and a **Save** button. Save is enabled
-  only when a file is open *and* modified; **Ctrl/Cmd+S** works inside the
-  editor. The chip of a dirty tab carries a dot.
+- **Toolbar**: a find-in-file search input and a **Save** button. Save is offered
+  for an unnamed document at all times and for an open file while it is modified;
+  **Ctrl/Cmd+S** works inside the editor. The chip of a tab with unsaved work
+  carries a dot.
 - **Saving** is optimistic and atomic: the panel PUTs the whole document with the
   mtime/size it opened with; the server re-checks containment and writes a temp
   file renamed over the target. If the file changed on disk meanwhile the panel
@@ -54,6 +75,7 @@ shipped `dsh-session-log-export` plugin, the Node half registers
 |---|---|
 | `GET /api/dsh-editor/file?session=<id>&path=<rel>` | read one text file (the host resolves the session's workspace root, containment-checks the path against it; strict UTF-8, no NUL; ≤ 2 MiB) |
 | `PUT /api/dsh-editor/file` | save one text file `{session, path, text, expected?: {mtimeMs, size}}` (atomic temp+rename; 409 when the file moved on disk) |
+| `PUT /api/dsh-editor/file` with `{create: true}` | **create** a new file at `path` (the PARENT folder must exist inside the workspace and is realpath-checked; the target must not exist — `409 EXISTS`; published create-exclusive, so a create never overwrites a file the user did not open) |
 | `GET /api/dsh-editor/vendor` | serve the vendored CodeMirror 6 classic bundle (lazy, cached) |
 
 The session id is what the tab's address already carries
@@ -70,13 +92,21 @@ uses on every boot.
 
 ```
 cordis.patch.yml      bundle layer: inserts the 'editor' row (nothing else patched)
-lib/index.js          Node half: the three /api/dsh-editor routes above
-lib/client.js         Browser half: tab type + guide entry, body (CodeMirror or the
-                      file picker), title with the dirty dot (module-table bundle)
+lib/index.js          Node half: the /api/dsh-editor routes above (read, save, create, vendor)
+lib/client.js         Browser half: tab type + guide entry, body (blank document or an
+                      open file), the save-as dialog over the `modals` service, and
+                      the title with the dirty dot (module-table bundle)
 lib/vendor/cm6.min.js GENERATED - the vendored CodeMirror 6 classic bundle
                       (IIFE on window.DSHEditorCM); commit it, do not edit by hand
 vendor/package.json   +  vendor/entry.js  — reproducible CM6 build inputs
 ```
+
+The save-as dialog lives in [`packages/dsh-modal`](../dsh-modal): the editor
+resolves the `modals` service **lazily** (`ctx.get('modals')` at save time) and
+falls back to `window.prompt` when it is absent, so the editor never depends on
+that package being installed. `dsh-modal` is not listed in this package's
+`dsh.client.inject` on purpose — the dependency is a service lookup, not a module
+load order.
 
 ### Regenerating the vendored CodeMirror bundle
 

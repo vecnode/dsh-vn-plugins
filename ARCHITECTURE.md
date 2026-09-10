@@ -62,6 +62,16 @@ packages/dsh-editor/              # sub-plugin: the editor tab type
   lib/client.js       # browser half (module-table bundle; hand-written, no build)
   lib/vendor/cm6.min.js   # GENERATED vendored CodeMirror 6 classic bundle (commit it)
   vendor/entry.js, package.json  # reproducible CM6 build inputs (see its README)
+packages/dsh-modal/               # sub-plugin: the shared dialog surface
+  package.json        # dsh.bundle + dsh.client
+  cordis.patch.yml    # inserts the 'modal' row (nothing else patched)
+  lib/index.js        # Node half: no-op row (the overlay is browser-only)
+  lib/client.js       # browser half: body-level overlay + the `modals` client service
+packages/dsh-open-in-app/         # the file-manager half of the Open In button
+  package.json        # dsh.bundle + dsh.client (forks the shipped client bundle)
+  cordis.patch.yml    # disables ui-open-in-app, inserts 'native-open-in-app'
+  lib/index.js        # Node half: POST /api/dsh-open-in-app/open (node builtins only)
+  lib/client.js       # GENERATED + PATCHED fork of the shipped open-in-app client
 ```
 
 > History: the pack shipped its own right-hand panel as `dsh-focus` (row
@@ -87,7 +97,7 @@ window.__ModuleLoader__.load({
     var module = { exports: {} };
     // ... code, using require("react") for React and hooks ...
     exports.name = "dsh-editor";
-    exports.inject = ["slots", "sidebarRightTabs", "remote.workspaceFiles"];
+    exports.inject = ["slots", "sidebarRightTabs"];
     exports.apply = apply;                          // cordis apply(ctx)
     return module.exports;
   },
@@ -101,16 +111,19 @@ ui-sidebar-documentpreview, ui-chat):
   named in the exported `inject` array (activation waits for them). The
   right-Sidebar registry is the cordis service **`sidebarRightTabs`** and the
   navigation controller is **`sidebarRight`** - both provided by
-  `@deepseek-ai/dsh-client-ui-sidebar-right`.
-- A namespaced remote is itself a cordis service that **mounts when its
-  gateway contribution lands** - which can be after a consumer activates.
-  Declare the dotted name in `inject` (`"remote.workspaceFiles"`) AND
-  re-resolve it at use time, so a slow namespace degrades to a typed failure
-  instead of a silent blank panel.
+  `dsh-rightbar` (the fork of `@deepseek-ai/dsh-client-ui-sidebar-right`).
+- A service another bundle provides can also be resolved **lazily, at use time**,
+  when a hard dependency would be wrong: `dsh-editor` reads `modals` only when a
+  save-as dialog is actually needed, so it keeps working (browser `prompt`
+  fallback) on a profile that never installed `dsh-modal`.
 - Registration is disposed through `ctx.effect(() => disposer, label)`: a tab
   type lives exactly as long as the plugin that contributed it.
 - `require` of core packages is possible only for modules the browser seed
-  provides (React, etc.) - keep runtime imports to a minimum.
+  provides (`react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`,
+  `@deepseek-ai/cordis`, `@deepseek-ai/dsh-client-store`,
+  `@deepseek-ai/dsh-client-ui-slots`, `-ui-primitives`, `-ui-dockkit`).
+  `react-dom/client`'s `createRoot` is what lets `dsh-modal` own a body-level
+  overlay without occupying a slot.
 
 **Why these client bundles are plain JavaScript, not TypeScript.** The format
 above is the only one the harness serves: a single hand-written module-table
@@ -244,8 +257,8 @@ only host-side routes in the pack.
 | `priority` | `extension` - text files open editable instead of in the shipped read-only preview |
 | `canOpen` | session-scoped address, path stays inside the workspace, extension not owned by a shipped preview (md/markdown/html/images/pdf/office/archive/media/binary) |
 | `guide` | one entry, `order: 20` (right after Files' 10): "Editor" -> creates an editor tab |
-| body | `EditorView` for a file address, `FilePicker` for the page address `sidebar://editor` |
-| title | the captured basename plus a dirty dot, fed by a module-level per-tab store |
+| body | `EditorView` for a file address, and the same `EditorView` with `file: null` for the page address `sidebar://editor` (a blank, unnamed document) |
+| title | the label the surface last set (the file name, adopted or on the record) or the captured basename, plus a dirty dot, fed by a module-level per-tab store |
 
 Behaviours that follow from that table:
 
@@ -256,10 +269,17 @@ Behaviours that follow from that table:
   it. Paths outside the session workspace (including `absolute/…` addresses,
   which carry no authorizing session) are vetoed too.
 - "+" -> Start -> **Editor** creates the empty **page** tab, whose body is a
-  workspace picker (`remote.workspaceFiles.list`, directories descend, ".."
-  goes up). Picking a file calls
-  `tab.actions.openResource(address, { replaceTab: tab.id })`, so the file
-  replaces the empty tab instead of leaving it behind.
+  blank CodeMirror document - nothing is read from disk, and there is no file
+  browser inside the tab. **Save** (or Ctrl+S) on that document opens the shared
+  dialog (`dsh-modal`) for a file name **with its extension**, `PUT`s it with
+  `create: true` into the session workspace root (the folder the tab was opened
+  in), and then decides the tab's fate from the SAME ranking a Files-tree click
+  uses (`canOpenFile(address)`): a text/code file the editor claims is handed to
+  `tab.actions.openResource(address, { replaceTab: tab.id })`, so the record
+  becomes that file's tab (restorable, chip named from the record), while an
+  extension a shipped preview owns **stays in the editor surface** with the file
+  adopted and the chip label set from the per-tab store - because the preview
+  cannot edit the file and this tab is the only place that can.
 
 **Node half** (`lib/index.js`) owns the authenticated routes on the
 `connection` service - the same mechanism the shipped session-log-export plugin
@@ -269,6 +289,7 @@ uses for its ZIP download:
 |---|---|
 | `GET /api/dsh-editor/file?session&path` | resolves the session's workspace root, realpath-containment inside it; strict UTF-8 decode + NUL rejection (`NOT_TEXT`); ≤ 2 MiB; returns `{text, version, mtimeMs, size}` |
 | `PUT /api/dsh-editor/file` | same containment; atomic temp-file + rename; optimistic guard - the echoed `mtimeMs`/`size` must match or it answers `409 CHANGED_ON_DISK` instead of clobbering |
+| `PUT /api/dsh-editor/file` with `{create: true}` | **create** a new file: the PARENT folder must exist inside the workspace and is realpath-checked (a symlinked folder cannot smuggle the write out), the target must not exist (`409 EXISTS`), and the publish is create-exclusive (hard link, then a `COPYFILE_EXCL` copy fallback) so a create never replaces a file the user did not open |
 | `GET /api/dsh-editor/vendor` | streams the vendored CodeMirror 6 classic bundle (committed `lib/vendor/cm6.min.js`, generated from `vendor/entry.js`, see the package README) |
 
 The session id in the URL is what the tab's address already carries; the
@@ -290,7 +311,81 @@ file open, so an idle GUI never pays for the editor. `lib/client.js` is
 hand-written module-table code with **no build step**; only the CM6 artifact is
 generated (when the version set changes).
 
-## 7. The installer
+## 7. The shared dialog surface (dsh-modal)
+
+Alpha.4 gave the editor a save-as dialog, and the same dialog is what any other
+plugin of this pack (or a deployment's own) should reach for, so it lives in its
+own bundle instead of inside the editor. `dsh-modal` provides one client service:
+
+```js
+const modals = ctx.get('modals')          // provided with ctx.reflect.provide
+await modals.open({ title, message, fields, validate, submit })
+await modals.alert('Saved.')              // single-button acknowledgement
+if (await modals.confirm({ message })) {} // true only on the confirm button
+const name = await modals.prompt({ label: 'Name' })
+```
+
+Design points worth keeping:
+
+- **One dialog at a time, FIFO.** A second `open()` while a dialog is up is
+  queued and shown when the first settles, so two racing callers cannot replace
+  each other's UI. `open()` resolves with `null` on cancel, otherwise the field
+  values (or whatever `submit` returned).
+- **`submit` runs while the dialog is open.** This is the whole point: work that
+  can fail (create a file, rename, POST) reports its failure IN the dialog, the
+  user keeps everything typed, and only a success closes it. A thrown error is
+  shown verbatim; `validate` covers the cheap, synchronous checks.
+- **No slot, no ordering.** The host creates its own container on
+  `document.body` and renders it with `react-dom/client`'s `createRoot` (both
+  seeded by the shell). There is no layout contribution and no inject edge, so
+  the surface is callable from every plugin at any point in the boot.
+- **Escape belongs to the dialog** while it is up: the keydown listener runs in
+  the capture phase and stops propagation, so the pane underneath never also
+  reacts to the same key. Mask click and Cancel cancel; none of them fires while
+  `submit` is in flight.
+
+## 8. The file-manager half of Open In (dsh-open-in-app)
+
+The Session header's **"Open In…"** split button comes from the shipped
+`@deepseek-ai/dsh-client-ui-open-in-app` + `@deepseek-ai/dsh-host-open-in-app`
+pair. Its file-manager entries (File Explorer / Finder / Files) are opened by the
+host through the OS shell's *open verb* - `Invoke-Item` inside a spawned
+`powershell.exe` on Windows - which is a fire-and-forget hand-off: the route
+reports a successful launch as soon as that helper exits, whatever the desktop
+did with it. On a host where the hand-off goes nowhere, the button simply does
+nothing.
+
+Fixing that means changing *which command runs*, and the shipped host row exposes
+no seam for it (its catalog is compile-time, its config carries only three
+timeouts, and a second `webServer` registration for the same path throws). The
+pack therefore does what it does for the bar: **fork the client bundle and
+disable the shipped row.**
+
+- `dsh-open-in-app/lib/client.js` is the shipped browser bundle with the module
+  id rewritten and **two patches** applied by `scripts/sync-vendored.ps1`: a
+  constant for the pack route + the file-manager id set, and the single line in
+  `launch()` that chooses a route. Everything else - the button, the menu, the
+  remembered choice, the icons, the apps/icon routes - is the shipped code, so
+  editors, Git GUIs and terminals keep going through the shipped host row
+  (which stays mounted and untouched).
+- `dsh-open-in-app/lib/index.js` is the pack's own Node half: one authenticated
+  route, node builtins only, that spawns the OS file browser **directly** -
+  `%SystemRoot%\explorer.exe` (absolute, so PATH cannot shadow it; Explorer's
+  delegated exit 1 counts as handed over), `open` on macOS, `xdg-open` on Linux,
+  and `explorer.exe` over a `wslpath -w` translation under WSL. A short watch
+  window turns an early spawn error or nonzero exit into a real HTTP 502 - which
+  the button paints as its error state - instead of another silent success.
+- The route repeats the shipped fence: browser authentication and the
+  Host/Origin check come from registering through `connection.fetch`, and the
+  body is validated at the wire (JSON, a known file-manager id, an absolute path
+  that names an existing directory). The launcher only ever spawns an argv array.
+
+Because the fork is patched rather than copied byte-for-byte, the patch list is
+data in `sync-vendored.ps1`: a harness bump that moves the patched code fails the
+re-sync loudly instead of shipping a fork that silently lost its behavior, and
+the generated banner lists the applied patches.
+
+## 9. The installer
 
 `scripts/install-all.ps1` / `uninstall-all.ps1` (PowerShell 5.1, ASCII only)
 are driven by `install.bat` / `uninstall.bat`.
@@ -318,14 +413,15 @@ are driven by `install.bat` / `uninstall.bat`.
   `package.json` version against the version the installed package reports. A
   plain double-click of `install.bat` after a version bump therefore re-adds the
   bundle, so development changes actually reach the profile.
-- **Live links**: the web profile installs all three bundles (`dsh-rightbar`,
-  `dsh-rightbar-files`, `dsh-editor`) as `pnpm link:` junctions straight into
-  this repo (`Test-LiveLink` detects this). Code edits then already apply - a
-  restart of `npx @deepseek-ai/dsh web` plus a hard browser refresh is all it
-  takes; the installer prints that instead of re-adding.
+- **Live links**: the web profile installs every bundle (`dsh-rightbar`,
+  `dsh-rightbar-files`, `dsh-editor`, `dsh-modal`, `dsh-open-in-app`) as
+  `pnpm link:` junctions straight into this repo (`Test-LiveLink` detects this).
+  Code edits then already apply - a restart of `npx @deepseek-ai/dsh web` plus a
+  hard browser refresh is all it takes; the installer prints that instead of
+  re-adding.
 - **Fork re-sync**: `scripts/sync-vendored.ps1` is the installer's sibling for
-  the two forked client bundles (§4). It is *not* run by `install.bat` - moving
-  a fork forward is a reviewed change, not an install step.
+  the three forked client bundles (§4, §8). It is *not* run by `install.bat` -
+  moving a fork forward is a reviewed change, not an install step.
 - **Retired-name prune**: both scripts remove a profile's stale `dsh-focus`
   and `dsh-files` bundles (kept in `$legacyNames`) before installing, so an
   upgrade from the pack's own-Files era drops the old rows/dock instead of
@@ -335,7 +431,7 @@ are driven by `install.bat` / `uninstall.bat`.
   `dsh-rightbar` also removes the disables, so the shipped rows come back on the
   next boot.
 
-## 8. Versioning and upgrade path
+## 10. Versioning and upgrade path
 
 - `.dsh-version.json` pins the dsh line, the `vendoredFrom` line the fork was
   taken from, and per-package versions.
@@ -346,11 +442,13 @@ are driven by `install.bat` / `uninstall.bat`.
   the right-bar tab registry shape (`register`/`openResource`/guide entries) and
   the keyed tab seats with their framework props (`useTabInfo`, `sessionId`,
   `useSessions`) - both of which this pack now owns, so a change there is a
-  merge into the fork rather than a break - and, on the Node side, the route
-  registration surface (`connection.fetch.register`, where a route must declare
-  `requestBody` or its handler never runs) and the session-root lookup.
+  merge into the fork rather than a break - the patched `launch()` of the
+  open-in-app client bundle (§8, the re-sync fails loudly when it moves), and, on
+  the Node side, the route registration surface (`connection.fetch.register`,
+  where a route must declare `requestBody` or its handler never runs) and the
+  session-root lookup.
 
-## 9. Troubleshooting quick table
+## 11. Troubleshooting quick table
 
 | Symptom | Cause / action |
 |---|---|
@@ -361,6 +459,10 @@ are driven by `install.bat` / `uninstall.bat`.
 | No "Editor" in the "+" / Start page | the client bundle did not activate: check the browser console for `[dsh-editor]`; a `sidebarRightTabs` service that never appears leaves activation pending |
 | Editor says "Editor unavailable (HTTP 400)" on the engine | the Node route is missing `requestBody: 'buffered'`, so Connection's bridge throws before the handler runs and the web server answers a bare 400 |
 | Clicking a file opens the read-only preview instead of the editor | the address was vetoed by `canOpen`: a preview-owned extension (md/html/image/pdf/…), a path outside the session workspace, or an `absolute/…` address |
+| Save-as says the name is taken / the folder is missing | `409 EXISTS` (pick another name - the dialog stays open with what you typed) or `404 NO_FOLDER` (a subfolder path must already exist; nothing creates directories) |
+| A `.md` saved from the editor did not become a tab of its own | intentional: a preview-owned extension keeps the editor surface (the preview cannot edit it), so the chip carries the file name through the tab-title store while the tab record stays `sidebar://editor` |
+| Save-as shows no dialog, only a browser prompt | `dsh-modal` is not mounted, so the editor fell back to `window.prompt`; re-run `install.bat -Force` and restart to add the bundle |
+| The "Open In…" File Explorer entry still does nothing | the forked row is not the one running: confirm the boot HTML lists `dsh-open-in-app/client.js` and not `@deepseek-ai/dsh-client-ui-open-in-app`, and that `dsh-open-in-app`'s layer still disables `ui-open-in-app` |
 | Editor tab says "Could not open the file" / `NO_WORKSPACE` | the session root could not be resolved (session not live and not persisted yet) or the path is outside the conversation folder; open the conversation once so its header is available |
 | Save answers "Changed on disk" | the file moved under you; use **Reload** (take the disk copy) or **Save anyway** (overwrite it) in the banner |
 | Fork drift after a harness update | `powershell -File scripts\sync-vendored.ps1 -Check` exits 1; run it without `-Check` and review the diff |

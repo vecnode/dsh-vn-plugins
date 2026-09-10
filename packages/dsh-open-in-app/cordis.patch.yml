@@ -1,0 +1,18 @@
+# dsh-open-in-app bundle layer (alpha).
+#
+# The pack owns the file-manager half of the Session header's "Open In..."
+# split button. This layer hard-disables the shipped browser row
+# (@deepseek-ai/dsh-client-ui-open-in-app) with the same id-targeted
+# `disabled: true` patch the pack uses for the sidebar rows, and inserts its
+# own row instead: the pack's forked browser bundle (identical UI, one patched
+# launch path) plus the Node half that opens the OS file browser directly.
+#
+# The shipped HOST row (`open-in-app`) is deliberately left alone: it still
+# resolves the installed applications, serves their icons, and launches them
+# for editors, Git GUIs and terminals. Only the file managers are re-routed.
+- id: ui-open-in-app
+  disabled: true
+
+- insert:
+    - id: native-open-in-app
+      name: 'dsh-open-in-app'

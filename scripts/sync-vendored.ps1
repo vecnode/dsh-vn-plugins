@@ -10,10 +10,17 @@
     names, and its bundle layer hard-disables the core rows so only the pack's
     copies run.
 
-    Run this after bumping the pinned harness line to move the fork forward:
+    It owns the file-manager half of "Open In..." the same way: the shipped
+    @deepseek-ai/dsh-client-ui-open-in-app browser bundle is forked into
+    dsh-open-in-app with the module-table id rewritten AND a small documented
+    patch list applied (each fork entry's Patches). The patch list is part of
+    this script on purpose - a plain copy would be overwritten on the next
+    re-sync, and a hand-edited vendored file would drift silently.
+
+    Run this after bumping the pinned harness line to move the forks forward:
     it copies each core bundle from the harness installation, rewrites the
-    module-table id to the pack's package name, stamps a generated-file banner,
-    and reports versions + hashes.
+    module-table id to the pack's package name, applies that fork's patches,
+    stamps a generated-file banner, and reports versions + hashes.
 
 .PARAMETER CoreModules
     Directory holding the harness's own node_modules (the one with
@@ -36,10 +43,57 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-# Vendored package -> the core package it forks.
+function Write-Step($msg) { Write-Host "[sync-vendored] $msg" -ForegroundColor Cyan }
+
+<#
+    One run of `$n` tab characters: the bundles are tab-indented, and a
+    here-string cannot carry a literal tab safely, so patch text is assembled
+    from explicit pieces.
+#>
+function T($n) { return ("`t" * $n) }
+
+# Vendored package -> the core package it forks, plus the patches applied after
+# the module-table id is rewritten. A patch is a literal Find/Replace pair: the
+# Find text must appear exactly once (tab-indented), and a re-sync that cannot
+# place one fails loudly instead of shipping a fork that silently lost it.
 $vendored = @(
-    [pscustomobject]@{ Name = 'dsh-rightbar'; Core = '@deepseek-ai/dsh-client-ui-sidebar-right' },
-    [pscustomobject]@{ Name = 'dsh-rightbar-files'; Core = '@deepseek-ai/dsh-client-ui-sidebar-files' }
+    [pscustomobject]@{
+        Name    = 'dsh-rightbar'
+        Core    = '@deepseek-ai/dsh-client-ui-sidebar-right'
+        Patches = @()
+    },
+    [pscustomobject]@{
+        Name    = 'dsh-rightbar-files'
+        Core    = '@deepseek-ai/dsh-client-ui-sidebar-files'
+        Patches = @()
+    },
+    [pscustomobject]@{
+        Name    = 'dsh-open-in-app'
+        Core    = '@deepseek-ai/dsh-client-ui-open-in-app'
+        Patches = @(
+            [pscustomobject]@{
+                Label   = 'declare the pack launcher route and the file-manager catalog ids'
+                Find    = (T 2) + 'const OPEN_IN_APP_OPEN_ROUTE = "/open-in-app/open";'
+                # Every element is parenthesized: the comma operator binds tighter
+                # than "+", so bare concatenations would collapse into one line.
+                Replace = (@(
+                        ((T 2) + 'const OPEN_IN_APP_OPEN_ROUTE = "/open-in-app/open";'),
+                        ((T 2) + '/** dsh-open-in-app: the pack''s own cross-platform file-browser route. */'),
+                        ((T 2) + 'const NATIVE_OPEN_ROUTE = "/api/dsh-open-in-app/open";'),
+                        ((T 2) + '/** Catalog ids whose launch is a file manager, not an editor or terminal. */'),
+                        ((T 2) + 'const NATIVE_FILE_MANAGER_APPS = new Set(["finder", "explorer", "filemanager"]);')
+                    ) -join "`n")
+            },
+            [pscustomobject]@{
+                Label   = 'send the file managers through the pack launcher, everything else unchanged'
+                Find    = (T 4) + 'const response = await this.fetcher(new URL(OPEN_IN_APP_OPEN_ROUTE, hostBase()), {'
+                Replace = (@(
+                        ((T 4) + 'const route = NATIVE_FILE_MANAGER_APPS.has(appId) ? NATIVE_OPEN_ROUTE : OPEN_IN_APP_OPEN_ROUTE;'),
+                        ((T 4) + 'const response = await this.fetcher(new URL(route, hostBase()), {')
+                    ) -join "`n")
+            }
+        )
+    }
 )
 
 function Write-Step($msg) { Write-Host "[sync-vendored] $msg" -ForegroundColor Cyan }
@@ -116,7 +170,22 @@ foreach ($item in $vendored) {
     $needle = 'id: "' + $item.Core + '"'
     if ($source.IndexOf($needle) -lt 0) { throw "could not find the module-table id in $sourcePath (layout changed?)" }
     $rewritten = $source.Replace($needle, 'id: "' + $item.Name + '"')
-    $banner = @"
+
+    # The fork's documented patches, applied in order. A Find that no longer
+    # matches means the core bundle moved: fail here rather than ship a fork
+    # that silently lost its behavior.
+    $patchLabels = @()
+    foreach ($patch in @($item.Patches)) {
+        if ($null -eq $patch) { continue }
+        if ($rewritten.IndexOf($patch.Find) -lt 0) {
+            throw "could not apply the '$($patch.Label)' patch to $sourcePath (layout changed?)"
+        }
+        $rewritten = $rewritten.Replace($patch.Find, $patch.Replace)
+        $patchLabels += $patch.Label
+    }
+
+    if ($patchLabels.Count -eq 0) {
+        $banner = @"
 // GENERATED - do not edit by hand.
 //
 // Byte-for-byte fork of $($item.Core)@$coreVersion
@@ -125,6 +194,21 @@ foreach ($item in $vendored) {
 // runs. Re-sync with:  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sync-vendored.ps1
 //
 "@
+    }
+    else {
+        $patchLines = ($patchLabels | ForEach-Object { '//   - ' + $_ }) -join "`n"
+        $banner = @"
+// GENERATED - do not edit by hand.
+//
+// Fork of $($item.Core)@$coreVersion (lib/client.js): the module-table id is
+// rewritten to "$($item.Name)", and these patches from scripts\sync-vendored.ps1
+// are applied on top:
+$patchLines
+// The pack's bundle layer disables the core row, so this copy is the one that
+// runs. Re-sync with:  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sync-vendored.ps1
+//
+"@
+    }
     $banner = $banner.Replace("`r`n", "`n")
     # The here-string carries no trailing newline, and without one the banner
     # would comment out the bundle's first line.
