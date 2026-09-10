@@ -1,0 +1,10 @@
+# dsh-rightbar-files bundle layer (alpha).
+#
+# The pack's own Files tab type for its right bar. The core row this forks
+# (@deepseek-ai/dsh-client-ui-sidebar-files) is disabled by the dsh-rightbar
+# layer; this layer only inserts the pack's copy. Load order matters: this
+# package sorts after dsh-rightbar, so the bar is already in the tree when the
+# tab type registers into it.
+- insert:
+    - id: rightbar-files
+      name: 'dsh-rightbar-files'

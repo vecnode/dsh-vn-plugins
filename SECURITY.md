@@ -10,7 +10,11 @@
 - **No core patching.** Every plugin is a standard dsh **bundle**
   (`dsh.bundle` + `cordis.patch.yml` + a `dsh.client` browser half). Nothing
   modifies DeepSeek core packages, harness profile internals beyond what
-  `dsh plugin` itself does, or any key material.
+  `dsh plugin` itself does, or any key material. The pack owns its right bar by
+  **forking** the shipped bar bundles into this repo and hard-disabling the core
+  rows through its own bundle layer - a supported patch form, not a core edit.
+  Forks are marked GENERATED and produced by `scripts/sync-vendored.ps1`, so
+  what runs is always reviewable in this repository.
 - **Pinned dependency line.** The pack is built and installed against exactly
   the harness version pinned in `.dsh-version.json`; installs always run
   through `npx @deepseek-ai/dsh@<pinned>`, never a floating `latest`.

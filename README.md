@@ -11,15 +11,19 @@ uninstall are clean and nothing patches core Harness files.
 
 ## Plugins (all **alpha** until the owner promotes them)
 
+`dsh-rightbar` is the **master**: it owns the right bar the other two live in.
+
 | Package | What it does | Status |
 |---|---|---|
-| [`packages/dsh-editor`](packages/dsh-editor) | **Editor** — a **tab type for the GUI's own right Sidebar** (the column the header's expand button opens, next to the shipped **Start** and **Files** tabs). It claims `dsh-resource://file/**` in the `extension` band, so opening a **text/code file** in the Sidebar (a click in the Files tree, a file link in the conversation) opens it **editable** there instead of in the read-only preview — Markdown/HTML/images/PDF keep their own previews. It also contributes a guide entry, so the tab strip's **"+"** control offers **Editor**: picking it creates an editor tab with a workspace file picker. Edits are saved to disk over an authenticated plugin route (find-in-file toolbar + **Save**). | alpha `0.1.0-alpha.2` |
+| [`packages/dsh-rightbar`](packages/dsh-rightbar) | **The right bar** — the pack's own fork of the harness right-hand column: tab strip with the **"+"** add control, docking panel (split / float / fullscreen), header expand button, the **Start** (guide) page, the tab-type registry (`sidebarRightTabs`) and controller (`sidebarRight`) other plugins register into, and the keyed tab body/title seats. Its bundle layer **hard-disables the shipped `ui-sidebar-right` / `ui-sidebar-files` rows**, so this copy is the one that runs. | alpha `0.1.0-alpha.1` |
+| [`packages/dsh-rightbar-files`](packages/dsh-rightbar-files) | **Files tab** — the session workspace tree as a tab type of the pack's bar (forked from the shipped `@deepseek-ai/dsh-client-ui-sidebar-files`, same disable-and-replace scheme). A file row opens its `dsh-resource://file/...` address, which the registry routes to whoever claims it. | alpha `0.1.0-alpha.1` |
+| [`packages/dsh-editor`](packages/dsh-editor) | **Editor tab** — a tab type registering into the bar above. Claims `dsh-resource://file/**` in the `extension` band, so opening a **text/code file** (a click in the Files tree, a file link in the conversation) opens it **editable** instead of in the read-only preview — Markdown/HTML/images/PDF keep their own previews. Contributes a guide entry, so **"+"** offers **Editor**: picking it creates an editor tab with a workspace file picker. Host-side code saves edits to disk over an authenticated route (find-in-file toolbar + **Save**). | alpha `0.1.0-alpha.3` |
 
-> The pack used to ship its own **Files** panel (`dsh-files`, earlier
-> `dsh-focus`) with a private dock and header capsules. The harness now ships
-> that panel natively — the right Sidebar has a Files tab of its own — so the
-> plugin was **retired** and the installer prunes both old names from every
-> profile it touches.
+> The pack used to ship its own Files panel (`dsh-files`, earlier `dsh-focus`)
+> with a private dock and header capsules; that was retired when the harness
+> grew a real right Sidebar. Now the pack goes one step further and **owns the
+> bar itself** by forking it — see `packages/dsh-rightbar/README.md` and the
+> `scripts/sync-vendored.ps1` re-sync path.
 
 ## Install (Windows)
 
@@ -51,22 +55,22 @@ Remove with **`uninstall.bat`**. Removing a bundle also removes its patch layer.
 ## Notes
 
 - Plugins are **alpha** and are built against the harness line pinned in
-  `.dsh-version.json` (`0.1.5-rc.1`). That line is what the right Sidebar's
-  tab-type registry exists on; when DSH evolves, bump the pin and adapt the
-  plugins (see `docs/COMPATIBILITY.md`).
+  `.dsh-version.json` (`0.1.5-rc.1`). `dsh-rightbar` / `dsh-rightbar-files` are
+  **forks** of that line's client bundles; after a pin bump run
+  `scripts\sync-vendored.ps1` to move the fork forward (see
+  `packages/dsh-rightbar/README.md`).
 - **Language**: the UI halves are intentionally **plain JavaScript**, no build
   step — core client packages ship hand-written module-table bundles and the
-  edit→restart loop stays instant. The one exception is `dsh-editor`'s
-  **vendored CodeMirror 6** artifact (`lib/vendor/cm6.min.js`), a generated
-  classic bundle rebuilt only when the CM6 version set changes (see
-  `packages/dsh-editor/README.md`); the plugin's own client code stays
-  hand-written.
+  edit→restart loop stays instant. Two files are **generated, never hand-edited**:
+  `dsh-editor`'s vendored **CodeMirror 6** artifact (`lib/vendor/cm6.min.js`)
+  and the two forked bar bundles (`dsh-rightbar/lib/client.js`,
+  `dsh-rightbar-files/lib/client.js`).
 - **Iterating on a change**: double-clicking `install.bat` **re-syncs every
   bundle whose version in this repo changed** — bump `package.json` +
   `.dsh-version.json`, then a plain double-click re-adds it;
   `install.bat -Force` re-adds regardless. One extra rule for the loop to
-  *look* applied: the web profile installs `dsh-editor` as a **live link** into
-  this repo, so code edits are already "installed" there — you only need to
+  *look* applied: the web profile installs all three bundles as **live links**
+  into this repo, so code edits are already "installed" there — you only need to
   **restart** `npx @deepseek-ai/dsh web` and **hard-refresh** the browser
   (Ctrl+F5). The client bundle is read once at app boot.
 - See [`docs/INSTALL.md`](docs/INSTALL.md) for the manual path and
@@ -76,20 +80,21 @@ Remove with **`uninstall.bat`**. Removing a bundle also removes its patch layer.
 
 - MIT — see [LICENSE](LICENSE). Plugins are authored by **vecnode**.
 - Security policy (supported line, private reporting, hardening expectations):
-  [SECURITY.md](SECURITY.md). This pack never touches API keys, never patches
-  DeepSeek core packages, and installs only the pinned harness line.
+  [SECURITY.md](SECURITY.md). This pack never touches API keys and never patches
+  DeepSeek core files: it adds its own rows and (for the right bar) disables the
+  shipped rows, then supplies its own copied bundles.
 
 ## Repository layout
 
 ```
 AGENTS.md              quick-start brief for coding agents working in this repo
-ARCHITECTURE.md        deep dive: plugin model, the right-Sidebar editor tab, installer
+ARCHITECTURE.md        deep dive: plugin model, the right bar fork, the editor tab, installer
 LICENSE                MIT license (vecnode)
 SECURITY.md            security policy: supported line, private reporting, hardening
 packages/<bundle>/     one standalone dsh bundle (package.json + cordis.patch.yml + lib/)
   lib/index.js         Node half (may be a no-op row so the client bundle ships)
-  lib/client.js        Browser half (module-table bundle; no build step)
-scripts/               install-all.ps1/.bat, uninstall-all.ps1/.bat
+  lib/client.js        Browser half (module-table bundle; hand-written or GENERATED fork)
+scripts/               install-all.ps1/.bat, uninstall-all.ps1/.bat, sync-vendored.ps1
 .dsh-version.json      the pinned harness line + per-package versions
 install.bat            double-click installer  |  uninstall.bat  double-click remover
 ```

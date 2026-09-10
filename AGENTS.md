@@ -21,51 +21,60 @@ Everything is a standard dsh **bundle**: an npm package with
 ## Layout
 
 - `packages/<bundle>/` - one standalone bundle per plugin. Today:
+  - `packages/dsh-rightbar/` - **the master**: the pack's own right bar (tab strip + "+", docking panel, expand button, Start/guide page, the `sidebarRightTabs` registry + `sidebarRight` controller, the keyed tab seats). `lib/client.js` is a GENERATED fork of `@deepseek-ai/dsh-client-ui-sidebar-right`; its `cordis.patch.yml` hard-disables the `ui-sidebar-right` / `ui-sidebar-files` rows and inserts `rightbar`.
+  - `packages/dsh-rightbar-files/lib/client.js` - GENERATED fork of `@deepseek-ai/dsh-client-ui-sidebar-files`: the Files tab type on top of the bar
+  - `packages/dsh-editor/lib/client.js` - browser half (hand-written, NO build step); the editor tab type (`dsh-resource://file/**` in the `extension` band) plus the guide entry the "+" control lists
   - `packages/dsh-editor/lib/index.js` - Node half (authenticated `/api/dsh-editor/*` routes: read/save text files by session, serve vendored CM6)
-  - `packages/dsh-editor/lib/client.js` - browser half (single file, NO build step); registers the `editor` tab TYPE into the core right Sidebar (`ctx.sidebarRightTabs.register`) plus its body/title seats and the guide entry the "+" control lists
   - `packages/dsh-editor/lib/vendor/cm6.min.js` - GENERATED vendored CodeMirror 6 (rebuilt from `vendor/`, never hand-edited)
-  - `packages/dsh-editor/cordis.patch.yml` - bundle layer (inserts the `editor` row)
+  - each package's `cordis.patch.yml` - its bundle layer (rows, plus the master's disables)
 - `scripts/install-all.ps1` / `uninstall-all.ps1` (+ `.bat`, plus root
   `install.bat` / `uninstall.bat`)
-- `.dsh-version.json` - the pinned dsh version and per-package versions
+- `scripts/sync-vendored.ps1` - moves the fork forward after a harness-line bump
+  (copies the core bundles, rewrites the module ids, stamps the banner; `-Check`
+  reports drift without writing)
+- `.dsh-version.json` - the pinned dsh version, the `vendoredFrom` line, and
+  per-package versions
 - `docs/` - INSTALL + COMPATIBILITY notes (superseded in depth by ARCHITECTURE.md)
 
-> Retired in alpha.2 of this pack: the pack's own **Files** plugin
+> Retired in alpha.2 of this pack: the first-generation **Files** plugin
 > (`dsh-files`, before that `dsh-focus`) with its private dock, header capsules
-> and `window.__dshFilesHost` bridge. The harness now ships that panel natively
-> - the right Sidebar has its own Files tab - so the package is gone and the
-> `editor` type registers straight into the product's tab-type registry. Both
-> install scripts carry `$legacyNames = @('dsh-focus','dsh-files')` so an
-> upgraded profile drops the old bundles instead of double-mounting.
+> and `window.__dshFilesHost` bridge. Both install scripts still carry
+> `$legacyNames = @('dsh-focus','dsh-files')` so an upgraded profile drops the
+> old bundles instead of double-mounting.
 
 ## Golden rules
 
 1. Target the pinned dsh line only (`0.1.5-rc.1`, see `.dsh-version.json`).
    Test against what the owner runs. When DSH publishes a new line, bump the
-   pin and adapt - do not silently chase master APIs. The `editor` type needs
-   the native right Sidebar (`@deepseek-ai/dsh-client-ui-sidebar-right`), which
-   this line ships.
+   pin, run `scripts\sync-vendored.ps1` (the right bar and Files tab are
+   **forks** of that line's bundles), then adapt - do not silently chase master
+   APIs.
 2. Plugins stay **alpha** (`-alpha.N`) until the owner says "make it stable".
 3. Never touch DeepSeek core packages, the harness profile internals beyond
-   what `dsh plugin` does, or API keys.
-4. The browser bundle is read at harness boot. The web profile installs
-   `dsh-editor` as a live link into this repo, so after editing
-   `packages/dsh-editor/lib/client.js` the app only needs a RESTART of
-   `npx @deepseek-ai/dsh web` plus a hard browser refresh (Ctrl+F5) - no
-   reinstall. Reinstall (`install.bat`, which re-adds on version change, or
-   `-Force`) is only needed when the package set or version changes. There is
-   no HMR unless a `pnpm run dev:web` watcher from the harness repo is running.
+   what `dsh plugin` does, or API keys. The pack owns its right bar by
+   **forking** the core bundles into `packages/` and hard-disabling the core
+   rows - never by editing an installed core file.
+4. The browser bundle is read at harness boot. The web profile installs all
+   three bundles as live links into this repo, so after editing a `client.js`
+   the app only needs a RESTART of `npx @deepseek-ai/dsh web` plus a hard
+   browser refresh (Ctrl+F5) - no reinstall. Reinstall (`install.bat`, which
+   re-adds on version change, or `-Force`) is only needed when the package set
+   or version changes. There is no HMR unless a `pnpm run dev:web` watcher from
+   the harness repo is running.
 5. Client bundles are module-table files:
    `window.__ModuleLoader__.load({ id, factory })`. Browser-only: no Node
-   imports; you may `require("react")`; reach core services through
-   `ctx.get(...)` after declaring them in the exported `inject` array
-   (e.g. `["slots","sidebarRightTabs","remote.workspaceFiles"]`). Mirror how
-   core consumers (ui-chat, ui-sidebar-right, ui-sidebar-files,
-   ui-sidebar-documentpreview) do it. A tab type is TWO registrations: the
-   static definition through `ctx.sidebarRightTabs.register(...)` and the
-   keyed body/title through `ctx.slots.inject("sidebar.right.pane.tab"...)`
-   with `key` = the definition's `id`; the "+" control lists every type that
-   declares a `guide` entry on its definition.
+   imports; you may `require("react")`; the shell statically seeds `react`,
+   `react/jsx-runtime`, `react-dom`, `@deepseek-ai/cordis`,
+   `@deepseek-ai/dsh-client-store`, `@deepseek-ai/dsh-client-ui-slots`,
+   `@deepseek-ai/dsh-client-ui-primitives` and
+   `@deepseek-ai/dsh-client-ui-dockkit`; anything else must be reached through
+   `ctx.get(...)` after declaring it in the exported `inject` array
+   (e.g. `["slots","sidebarRightTabs","remote.workspaceFiles"]`). A tab type is
+   TWO registrations: the static definition through
+   `ctx.sidebarRightTabs.register(...)` and the keyed body/title through
+   `ctx.slots.inject("sidebar.right.pane.tab"...)` with `key` = the
+   definition's `id`; the "+" control lists every type that declares a `guide`
+   entry on its definition.
 6. Installer scripts are Windows PowerShell 5.1-compatible AND ASCII-only
    (smart quotes/dashes have broken parsing before). After editing a `.ps1`,
    run a parser check (see below).
@@ -88,38 +97,49 @@ is read from `node_modules\.modules.yaml`).
 
 > Package retirements: the panel was `dsh-focus` (row `focus`) until alpha.10,
 > when it became `dsh-files` (row `files`), and in alpha.2 of the editor the
-> whole Files package was dropped because the GUI ships that tab natively. Both
-> install scripts carry a `$legacyNames = @('dsh-focus','dsh-files')` prune so
-> an upgraded profile drops the old bundle instead of double-mounting. Add
-> future removed/renamed packages to that list in both scripts.
+> whole first-generation Files package was dropped when the harness grew its own
+> right Sidebar with a Files tab. From then on the pack **forks** the bar
+> (`dsh-rightbar`, `dsh-rightbar-files`) and disables the core rows instead of
+> depending on them. Both install scripts keep the
+> `$legacyNames = @('dsh-focus','dsh-files')` prune so an upgraded profile drops
+> the old bundles. Add future removed/renamed packages to that list in both
+> scripts.
 
 ## Iterating on a change (quick loop)
 
 ```powershell
 # 1. syntax-check a JS/PS file
 node --check packages/dsh-editor/lib/client.js
+node --check packages/dsh-rightbar/lib/index.js    # forked client.js is generated
 $t=$null;$e=$null; [System.Management.Automation.Language.Parser]::ParseFile(
   'scripts/install-all.ps1',[ref]$t,[ref]$e); $e.Count   # expect 0
 
-# 2. push the new bundle into the web profile
+# 2. after a harness-line bump, move the fork forward (then review the diff)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-vendored.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-vendored.ps1 -Check
+
+# 3. push the bundles into the web profile
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-all.ps1 -Force
 
-# 3. verify the served bundle really contains the change (optional smoke):
+# 4. verify the served bundle really contains the change (optional smoke):
 $env:DSH_HOME = "$env:USERPROFILE\.dsh"
 npx --yes @deepseek-ai/dsh@0.1.5-rc.1 web --no-open --port 3099   # background
-# then GET http://127.0.0.1:3099/?token=<token-from-log>, find the
-# /plugins/??...dsh-editor/client.js URL in the HTML and confirm markers.
+# then GET http://127.0.0.1:3099/?token=<token-from-log>, and confirm the boot
+# HTML lists dsh-rightbar / dsh-rightbar-files / dsh-editor client.js and does
+# NOT list the disabled @deepseek-ai/dsh-client-ui-sidebar-* ones.
 
-# 4. commit as vecnode and push
+# 5. commit as vecnode and push
 git add -A; git commit -m "describe the change"; git push
 ```
 
 ## Checklist before finishing a UI change
 
 - [ ] `node --check` passes for every touched `.js`
+- [ ] generated files untouched by hand (`dsh-rightbar*/lib/client.js`,
+      `dsh-editor/lib/vendor/cm6.min.js`) - re-sync/rebuild instead
 - [ ] `.ps1` files still parse and are ASCII-only
 - [ ] version bumped (`packages/.../package.json` + `.dsh-version.json`) and
       installed with `-Force` to the web profile when behavior changed
-- [ ] README/`packages/dsh-editor/README.md` bullets updated
+- [ ] README/`packages/*/README.md` bullets updated
 - [ ] no core-file or profile-file edits beyond the installer's own writes
 - [ ] pushed to `origin` (`main`) as vecnode

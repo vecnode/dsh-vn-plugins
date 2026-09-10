@@ -1,7 +1,19 @@
 {
-  "comment": "The DeepSeek Harness version line this plugin pack is built and tested against. Plugins are shipped as alpha until the owner promotes them to stable. The installer pins this exact dsh version when driving the CLI.",
+  "comment": "The DeepSeek Harness version line this plugin pack is built and tested against. Plugins are shipped as alpha until the owner promotes them to stable. The installer pins this exact dsh version when driving the CLI. 'vendoredFrom' records the harness line whose client bundles dsh-rightbar / dsh-rightbar-files were forked from.",
   "dsh": "0.1.5-rc.1",
+  "vendoredFrom": "0.1.5-rc.1",
   "packages": {
+    "dsh-rightbar": {
+      "version": "0.1.0-alpha.1",
+      "rows": ["rightbar"],
+      "disablesRows": ["ui-sidebar-right", "ui-sidebar-files"],
+      "vendors": ["@deepseek-ai/dsh-client-ui-sidebar-right"]
+    },
+    "dsh-rightbar-files": {
+      "version": "0.1.0-alpha.1",
+      "rows": ["rightbar-files"],
+      "vendors": ["@deepseek-ai/dsh-client-ui-sidebar-files"]
+    },
     "dsh-editor": {
       "version": "0.1.0-alpha.3",
       "rows": ["editor"],

@@ -1,0 +1,32 @@
+{
+  "name": "dsh-rightbar",
+  "version": "0.1.0-alpha.1",
+  "description": "Right bar: dsh-vn-plugins' own right Sidebar for the DeepSeek Harness web GUI - the tab strip, the docking panel, the expand control, the tab-type registry (sidebarRightTabs/sidebarRight), the keyed tab seats and the Start/guide page. Vendored from the shipped @deepseek-ai/dsh-client-ui-sidebar-right bundle so the pack owns the code; the bundle layer disables the core row. Alpha.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-resources",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-session"
+      ]
+    }
+  },
+  "license": "MIT"
+}

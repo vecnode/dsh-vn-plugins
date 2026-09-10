@@ -67,8 +67,8 @@ web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   `install.bat` so its prune removes it.
 - **No "Editor" capsule on the "+" / Start page** — pick an active
   conversation, restart and hard-refresh (Ctrl+F5); check the browser console
-  for `[dsh-editor]` errors if it still does not show. The native right Sidebar
-  only exists on the pinned `0.1.5-rc.1` line.
+  for `[dsh-editor]` errors if it still does not show. The bar itself is the
+  pack's own (`dsh-rightbar`), forked from the `0.1.5-rc.1` line.
 - **A text file opens in the read-only preview** — that extension belongs to a
   shipped preview (`.md`, `.html`, images, `.pdf`, …) or the path is outside the
   conversation folder; the editor deliberately leaves those alone.

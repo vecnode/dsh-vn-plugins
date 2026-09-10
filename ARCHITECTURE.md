@@ -45,10 +45,17 @@ A **bundle** is an npm package whose `package.json` declares:
   pnpm-installs the package into the profile and appends it to
   `dsh.profile.bundles` (order matters: later layers win per row).
 
-A UI plugin therefore has **two halves in one package**:
+A UI plugin therefore has **two halves in one package** - and the pack has one
+master (the bar) plus sub-plugins that live in it:
 
 ```
-packages/dsh-editor/
+packages/dsh-rightbar/            # the master: the pack's own right bar
+  package.json        # dsh.bundle + dsh.client
+  cordis.patch.yml    # disables ui-sidebar-right / ui-sidebar-files, inserts 'rightbar'
+  lib/index.js        # Node half: no-op row (the bar is browser-only)
+  lib/client.js       # GENERATED fork of the shipped sidebar-right bundle
+packages/dsh-rightbar-files/      # the Files tab type (same fork scheme)
+packages/dsh-editor/              # sub-plugin: the editor tab type
   package.json        # name, version, dsh.bundle + dsh.client, exports
   cordis.patch.yml    # inserts the 'editor' row (nothing else patched)
   lib/index.js        # Node half: authenticated /api/dsh-editor routes (file + vendor)
@@ -61,9 +68,11 @@ packages/dsh-editor/
 > `focus`) through alpha.9, then as `dsh-files` (row `files`) from alpha.10,
 > where it grew a tab-strip dock and published `window.__dshFilesHost` so a
 > second bundle could register a tab into it. The harness has since shipped a
-> **native right Sidebar with a public tab-type registry** (see §4), so the
-> whole panel - dock, header capsules, host bridge and the `file-reference-local`
-> row override - was retired in the editor's alpha.2. Both install scripts carry
+> **right Sidebar with a tab-type registry**, so that panel - dock, header
+> capsules, host bridge and the `file-reference-local` row override - was
+> retired in the editor's alpha.2, and the pack moved to registering tab types
+> into the shipped bar. It now goes further and **owns the bar itself** by
+> forking it (see §4). Both install scripts carry
 > `$legacyNames = @('dsh-focus','dsh-files')` and prune those names from every
 > profile they touch, so an upgrade cannot leave a stale bundle mounted.
 
@@ -111,17 +120,55 @@ watcher from the harness repo runs), and would type against a client surface
 that is still evolving. Plain JS + JSDoc keeps the edit -> restart loop instant
 and the code greppable against the shipped core bundles.
 
-## 4. The right Sidebar seam (what this pack now targets)
+## 4. The right bar (the pack owns it)
 
-On this line the GUI owns a real right column: the conversation header's
-expand button (`conversation.session.header.corner`) opens
-`@deepseek-ai/dsh-client-ui-sidebar-right`, a per-session docking surface with
-a tab strip, a "+" add control, splits and floating panels. On a fresh session
-its strip starts with the shipped **Start** tab - the *guide* page, whose body
-lists one entry capsule per registered type - and the **Files** tab
-(`@deepseek-ai/dsh-client-ui-sidebar-files`) with the session workspace tree.
+The GUI has a real right column: the conversation header's expand button
+(`conversation.session.header.corner`) opens a per-session docking surface with
+a tab strip, a "+" add control, splits and floating panels. Its strip starts
+with the **Start** tab - the *guide* page, whose body lists one entry capsule
+per registered tab type - and the **Files** tab with the session workspace tree.
 
-The seam a third party uses is the **tab-type registry**:
+**That bar is this pack's.** `dsh-rightbar` ships a byte-for-byte fork of the
+shipped `@deepseek-ai/dsh-client-ui-sidebar-right` bundle (module-table id
+rewritten to `dsh-rightbar`), and `dsh-rightbar-files` does the same for
+`@deepseek-ai/dsh-client-ui-sidebar-files`. The master's bundle layer then
+hard-disables the two core rows:
+
+```yaml
+- id: ui-sidebar-right
+  disabled: true
+- id: ui-sidebar-files
+  disabled: true
+- insert:
+    - id: rightbar
+      name: 'dsh-rightbar'
+```
+
+Why a fork: the pack can then change any part of the column (chrome, tab
+handling, guide, Files tree) without editing an installed core file, and
+without waiting for a new seam. The two mechanisms that make it safe:
+
+- **Row disable is a supported patch form.** The CLI itself disables its
+  telemetry row with exactly `{ id, disabled: true }` (see
+  `resolveTelemetryPatch` in `dsh/lib/profile-boot-*.js`). A disabled row is not
+  an active Loader entry, so `dsh-client-modules` never puts its client bundle
+  in the boot graph - verified: the boot HTML lists `dsh-rightbar`,
+  `dsh-rightbar-files` and `dsh-editor`, and **zero** occurrences of the two
+  disabled packages.
+- **The bar's runtime dependencies are static modules of the shell.** The Vite
+  shell seeds `react`, `react/jsx-runtime`, `react-dom`, `@deepseek-ai/cordis`,
+  `@deepseek-ai/dsh-client-store`, `@deepseek-ai/dsh-client-ui-slots`,
+  `@deepseek-ai/dsh-client-ui-primitives` and
+  `@deepseek-ai/dsh-client-ui-dockkit` for every bundle
+  (`staticModules()` in the frontend's index chunk), so a copied bundle keeps
+  resolving them. Nothing else is required at runtime: a package's
+  `dsh.client.inject` list is only an ordering hint, and the client graph walk
+  skips a named dependency that is not in the graph - which is why the shipped
+  `ui-sidebar-documentpreview` row (deliberately left enabled) still loads and
+  still finds the `sidebarRightTabs` service, now provided by the pack.
+
+The contract other plugins use is unchanged (that is the point of a
+byte-for-byte fork) and is the seam the pack's own sub-plugins use:
 
 ```ts
 ctx.sidebarRightTabs.register({
@@ -139,8 +186,8 @@ ctx.sidebarRightTabs.register({
   the *keyed* body and title:
   `ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({ name, key: id, inject }, Body))`
   and the same for `sidebar.right.pane.tab.title`. A kind with no registrant
-  renders the product's "nothing can view this yet" notice, so a missing body
-  is a visible defect rather than an empty pane.
+  renders the "nothing can view this yet" notice, so a missing body is a visible
+  defect rather than an empty pane.
 - **Addresses, not files.** Everything the column opens is an address:
   resources as `dsh-resource://<type>/...` (files are
   `dsh-resource://file/session/<sessionId>/<path>`), pages as
@@ -158,15 +205,22 @@ ctx.sidebarRightTabs.register({
 - **A body gets its runtime from the framework, not from props it invented:**
   `useTabInfo()` returns the tab record (`contentId`, `navigation.params`,
   `title`, `signal`, `actions`), and session-scoped seats additionally receive
-  `sessionId` and the `useSessions` reader. Nothing here is patched into core
-  files; a tab type is a public extension point.
+  `sessionId` and the `useSessions` reader.
 
-## 5. Files (now shipped by the product)
+**Keeping the fork honest.** `scripts/sync-vendored.ps1` copies both core
+bundles from the harness `node_modules` (profile first, then the npx cache),
+rewrites their module ids, stamps a GENERATED banner and prints hashes;
+`-Check` reports drift with a non-zero exit. The republished copies are
+generated files - never hand-edit them, and review the diff after a harness-line
+bump, because a fork does not track upstream by itself.
 
-The pack no longer contributes a Files panel. The product's own
-`@deepseek-ai/dsh-client-ui-sidebar-files` lists the session workspace through
-the `remote.workspaceFiles` Remote (`list(sessionId, path, signal)`), one level
-at a time, and a file row calls
+## 5. The Files tab (the pack's `dsh-rightbar-files`)
+
+`dsh-rightbar-files` is the second half of the fork: the same bundle the product
+ships as `@deepseek-ai/dsh-client-ui-sidebar-files`, with the core row disabled
+and this one in its place. It registers the `files` tab kind (guide entry
+`order: 10`) and lists the session workspace through the `remote.workspaceFiles`
+Remote (`list(sessionId, path, signal)`), one level at a time; a file row calls
 `tabActions.openResource(fileAddressFor(sessionId, root, path))`. Routing that
 address to a viewer is the registry's job - which is exactly the hook §6 uses.
 
@@ -176,7 +230,9 @@ path therefore needs a route of its own (§6).
 
 ## 6. The editor tab type (dsh-editor)
 
-One bundle, two halves, no core patches.
+A **sub-plugin** of the bar: one bundle, two halves, no core patches. Its client
+half is hand-written (the pack's own code, not a fork); its Node half owns the
+only host-side routes in the pack.
 
 **Browser half** (`lib/client.js`) registers the type:
 
@@ -262,40 +318,52 @@ are driven by `install.bat` / `uninstall.bat`.
   `package.json` version against the version the installed package reports. A
   plain double-click of `install.bat` after a version bump therefore re-adds the
   bundle, so development changes actually reach the profile.
-- **Live links**: the web profile installs `dsh-editor` as a `pnpm link:`
-  junction straight into `packages\dsh-editor` (`Test-LiveLink` detects this).
-  Code edits then already apply to the bundle - a restart of
-  `npx @deepseek-ai/dsh web` plus a hard browser refresh is all it takes; the
-  installer prints that instead of re-adding.
+- **Live links**: the web profile installs all three bundles (`dsh-rightbar`,
+  `dsh-rightbar-files`, `dsh-editor`) as `pnpm link:` junctions straight into
+  this repo (`Test-LiveLink` detects this). Code edits then already apply - a
+  restart of `npx @deepseek-ai/dsh web` plus a hard browser refresh is all it
+  takes; the installer prints that instead of re-adding.
+- **Fork re-sync**: `scripts/sync-vendored.ps1` is the installer's sibling for
+  the two forked client bundles (§4). It is *not* run by `install.bat` - moving
+  a fork forward is a reviewed change, not an install step.
 - **Retired-name prune**: both scripts remove a profile's stale `dsh-focus`
   and `dsh-files` bundles (kept in `$legacyNames`) before installing, so an
   upgrade from the pack's own-Files era drops the old rows/dock instead of
   double-mounting. Add future removed/renamed packages to that list in both
   scripts.
-- **Uninstall** removes the package and therefore its patch layer.
+- **Uninstall** removes the package and therefore its patch layer. Removing
+  `dsh-rightbar` also removes the disables, so the shipped rows come back on the
+  next boot.
 
 ## 8. Versioning and upgrade path
 
-- `.dsh-version.json` pins the dsh line and per-package versions.
+- `.dsh-version.json` pins the dsh line, the `vendoredFrom` line the fork was
+  taken from, and per-package versions.
 - Packages stay `-alpha.N` until the owner says "make it stable".
-- When DSH publishes a newer line: bump the pin, re-install with `-Force`, and
-  adapt the affected API seams. The seams most likely to change, in order:
-  the right-Sidebar tab registry shape (`register`/`openResource`/guide
-  entries), the keyed tab-body seat and its framework props (`useTabInfo`,
-  `sessionId`, `useSessions`), and - on the Node side - the route
-  registration surface (`connection.fetch.register`) and the session-root
-  lookup. All of them stay inside this package.
+- When DSH publishes a newer line: bump the pin, run `sync-vendored.ps1` (then
+  review the diff - a fork does not track upstream), re-install with `-Force`,
+  and adapt the affected API seams. The seams most likely to change, in order:
+  the right-bar tab registry shape (`register`/`openResource`/guide entries) and
+  the keyed tab seats with their framework props (`useTabInfo`, `sessionId`,
+  `useSessions`) - both of which this pack now owns, so a change there is a
+  merge into the fork rather than a break - and, on the Node side, the route
+  registration surface (`connection.fetch.register`, where a route must declare
+  `requestBody` or its handler never runs) and the session-root lookup.
 
 ## 9. Troubleshooting quick table
 
 | Symptom | Cause / action |
 |---|---|
 | Old panel still showing after edit | client bundle is read at boot; restart the app and HARD-refresh the browser (Ctrl+F5). The web profile is a live link, so no reinstall is needed |
+| The right bar is missing entirely | the fork did not load: confirm the boot HTML lists `dsh-rightbar/client.js`, and that `dsh-rightbar`'s layer still disables `ui-sidebar-right` / `ui-sidebar-files` (a profile patch that re-enables them mounts two bars, which throws on the duplicate tab-type ids) |
+| The bar is the shipped one, not the pack's | `dsh-rightbar` is not in `dsh.profile.bundles` (or the row id was renamed); re-run `install.bat`, then restart |
 | Two Files panels / a stray dock after upgrading | the retired `dsh-files` (or `dsh-focus`) bundle is still in the profile; re-run `install.bat` (its prune removes both) |
-| No "Editor" in the "+" / Start page | the client bundle did not activate: check the browser console for `[dsh-editor]` and that the harness line is `0.1.5-rc.1` (older lines have no `sidebarRightTabs` service, so activation waits and nothing registers) |
+| No "Editor" in the "+" / Start page | the client bundle did not activate: check the browser console for `[dsh-editor]`; a `sidebarRightTabs` service that never appears leaves activation pending |
+| Editor says "Editor unavailable (HTTP 400)" on the engine | the Node route is missing `requestBody: 'buffered'`, so Connection's bridge throws before the handler runs and the web server answers a bare 400 |
 | Clicking a file opens the read-only preview instead of the editor | the address was vetoed by `canOpen`: a preview-owned extension (md/html/image/pdf/…), a path outside the session workspace, or an `absolute/…` address |
 | Editor tab says "Could not open the file" / `NO_WORKSPACE` | the session root could not be resolved (session not live and not persisted yet) or the path is outside the conversation folder; open the conversation once so its header is available |
 | Save answers "Changed on disk" | the file moved under you; use **Reload** (take the disk copy) or **Save anyway** (overwrite it) in the banner |
+| Fork drift after a harness update | `powershell -File scripts\sync-vendored.ps1 -Check` exits 1; run it without `-Check` and review the diff |
 | Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; scripts auto-match - re-run installer |
 | `-Target desktop` is rejected | intentional: DSH Desktop is no longer a target of this pack |
 | `.ps1` parse error after editing | non-ASCII character crept in (smart quotes/dash); keep scripts ASCII-only |

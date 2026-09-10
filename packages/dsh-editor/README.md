@@ -1,19 +1,19 @@
-# dsh-editor (alpha.2)
+# dsh-editor (alpha.3)
 
-**Editor** is a **tab type for the GUI's own right Sidebar** — the column the
-conversation header's expand button opens, beside the shipped **Start** (guide)
-and **Files** tabs. It opens **text files only** (strict UTF-8, binary is
-refused), edits them with a vendored **CodeMirror 6**, and saves them back to
-disk. Alpha.
+**Editor** is a **tab type for the pack's right bar** (`dsh-rightbar` — the
+right-hand column of the DeepSeek Harness web GUI, beside the **Start** page and
+the **Files** tab that `dsh-rightbar-files` provides). It opens **text files
+only** (strict UTF-8, binary is refused), edits them with a vendored
+**CodeMirror 6**, and saves them back to disk. It is a **sub-plugin**: it holds
+no bar code, and its host-side half owns the pack's only HTTP routes. Alpha.
 
-## What alpha.2 does
+## What alpha.3 does
 
-- **Registered into the native right Sidebar** through the product's own tab-type
-  registry (`ctx.sidebarRightTabs.register`): id `dsh-editor`, kind `editor`,
-  with the body and the chip title registered in the keyed
-  `sidebar.right.pane.tab` / `sidebar.right.pane.tab.title` seats. There is no
-  private dock, no header capsule and no window bridge any more — the shipped
-  "Files" tab and this one are both just tab types of the same column.
+- **Registered into the right bar** through the bar's tab-type registry
+  (`ctx.sidebarRightTabs.register`, provided by `dsh-rightbar`): id
+  `dsh-editor`, kind `editor`, with the body and the chip title registered in
+  the keyed `sidebar.right.pane.tab` / `sidebar.right.pane.tab.title` seats.
+  There is no private dock, no header capsule and no window bridge.
 - **Text files open editable.** The type declares `dsh-resource://file/**` in
   the `extension` priority band, which outranks every viewer the product ships,
   and vetoes in `canOpen`:
@@ -63,7 +63,8 @@ exactly like `@deepseek-ai/dsh-api-workspace-files` resolves its own reads. The
 client never names a root, and a session whose root cannot be resolved gets a
 typed `NO_WORKSPACE` failure instead of a guess.
 
-Both targets (raw CLI web + dsh-desktop) expose the same `connection` surface.
+The web profile exposes the same `connection` surface the route registration
+uses on every boot.
 
 ## Layout
 
@@ -94,6 +95,5 @@ npx --yes esbuild entry.js --bundle --minify --format=iife --global-name=DSHEdit
 
 Repo `install.bat` / `uninstall.bat` auto-discover this package (it is a
 standard `dsh.bundle`); nothing else changes. After a version bump, a plain
-`install.bat` re-adds it; the raw CLI profile gets it as a live link, so code
-edits just need a restart of `npx @deepseek-ai/dsh web` plus a hard refresh —
-dsh-desktop needs a relaunch to refresh its generation snapshot.
+`install.bat` re-adds it; the web profile gets it as a live link, so code edits
+just need a restart of `npx @deepseek-ai/dsh web` plus a hard refresh.

@@ -1,0 +1,23 @@
+# dsh-rightbar bundle layer (alpha).
+#
+# The pack owns its right bar. This layer hard-disables the two shipped rows
+# that make up the stock column - @deepseek-ai/dsh-client-ui-sidebar-right (the
+# bar itself, the tab-type registry and the Start/guide page) and
+# @deepseek-ai/dsh-client-ui-sidebar-files (the Files tab type) - using the
+# same id-targeted `disabled: true` patch the CLI itself uses for its telemetry
+# row, and inserts the pack's own rows instead. Exactly one bar is mounted, and
+# it is the pack's copy.
+#
+# The shipped @deepseek-ai/dsh-client-ui-sidebar-documentpreview row is left
+# alone on purpose: it only consumes the `sidebarRightTabs` service and the
+# `sidebar.right.pane.tab` seat, which this package provides under the same
+# names, so its Markdown/code/image/PDF previews keep working.
+- id: ui-sidebar-right
+  disabled: true
+
+- id: ui-sidebar-files
+  disabled: true
+
+- insert:
+    - id: rightbar
+      name: 'dsh-rightbar'
