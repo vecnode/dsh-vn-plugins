@@ -81,15 +81,16 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 1. Start (or restart) `npx @deepseek-ai/dsh web` and open/select a conversation.
 2. Open the right Sidebar with the **expand button** in the conversation header
    (top right). It opens on the shipped **Start** page, whose capsules list the
-   Files tab and the new **Editor**. The tab strip's **"+"** opens that Start
-   page again at any time.
-3. Click a **text/code file** in the Files tab to open it in the **Editor** —
-   **Markdown included**: `.md` opens as editable text, and its toolbar's
-   **Preview** button (or the rendered page's **Edit** button) flips between the
-   editor and the rendered view on the same tab. Images and PDFs keep their own
-   preview tabs. Picking *Editor* from the "+" page starts a **blank** file:
-   **Save** (or Ctrl+S) asks for its name with its extension and creates it in
-   the conversation folder.
+   Files tab, the new **Editor** and **GitTree** (the workspace's git tree and
+   commits — it needs `git` on the `PATH` of the host running `dsh web`). The tab
+   strip's **"+"** opens that Start page again at any time.
+3. Click a **text/code file** in the Files tab — or in **GitTree** — to open it in
+   the **Editor**: **Markdown included**, where `.md` opens as editable text and
+   its toolbar's **Preview** button (or the rendered page's **Edit** button) flips
+   between the editor and the rendered view on the same tab. Images and PDFs keep
+   their own preview tabs. Picking *Editor* from the "+" page starts a **blank**
+   file: **Save** (or Ctrl+S) asks for its name with its extension and creates it
+   in the conversation folder.
 4. Enter your API key in **Settings → Models** — installers never touch keys.
 
 ## Troubleshooting
@@ -160,3 +161,16 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   theme's own stylesheets at boot, and it injects nothing when it cannot read
   them (forcing white without the tokens would be worse). Reinstall so
   `dsh-themes` alpha.3+ is in the profile, then restart.
+- **No "GitTree" capsule on the "+" / Start page** — `dsh-gittree` is not mounted;
+  a new package needs one install run (`install.bat` / `./install.sh`, or
+  `-Force`), then a restart. Check the console for `[dsh-gittree]` if it still
+  does not show.
+- **GitTree says "Not a git repository"** — the conversation folder is not inside
+  a repository. The tab reports that instead of guessing; open a session whose
+  workspace is a repository (or run `git init` in it).
+- **GitTree says "git is not installed"** — `git` is missing from the `PATH` of
+  the host running `dsh web` (the routes spawn it directly).
+- **GitTree opens a file in the wrong tab, or not at all** — the row hands the
+  file to the ordinary address and lets the registry decide; with neither
+  `dsh-editor` nor a shipped preview claiming that extension, nothing can draw
+  it. That is the same rule the Files tab follows.

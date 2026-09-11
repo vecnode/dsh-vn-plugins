@@ -44,6 +44,13 @@ The pack targets the harness line DeepSeek ships to the raw web install
   tab) goes through the plugin's own authenticated route; the session's
   workspace root is resolved host-side from the live session header or session
   persistence.
+- **dsh-gittree** adds the GitTree page tab: the workspace's git tree (status
+  badges, path filter, changed-only switch) and its commit history, read through
+  the package's own **read-only** `/api/dsh-gittree/*` routes. It replaces
+  nothing and publishes no service, so it cannot disturb the bar's tab-type
+  chain; a row click opens the file through the ordinary
+  `dsh-resource://file/...` address, which the editor or a shipped preview then
+  claims. **git must be on `PATH`** for its routes to answer.
 - **dsh-modal** provides the shared `modals` client service the editor's save-as
   dialog uses. It owns no slot and no ordering edge, and the editor resolves it
   lazily (falling back to the browser's own prompt), so neither plugin requires
@@ -143,6 +150,19 @@ The pack targets the harness line DeepSeek ships to the raw web install
   one viewer, `dsh-themes` hides the preview header's viewer menu on Markdown
   tabs, so "Plain text" is no longer offered beside "Markdown" - the editor's
   **Edit** button is the way back to the text. No new packages.
+
+- **gittree alpha.1 (new package)**: the pack gained **`dsh-gittree`**, a
+  **read-only** git tab: a page tab type on the right bar with one guide entry
+  (`order: 30`, after Files and Editor), showing the workspace's git tree with
+  status badges plus a History view whose commits open to their changed files.
+  Its Node half owns three read-only routes (`state` / `history` / `commit`) that
+  spawn `git` with argv arrays, a pinned environment, a 10 s timeout and an 8 MiB
+  cap; the only subcommands reachable are `rev-parse`, `status`, `ls-files`,
+  `log`, `show` and `diff-tree`, so it cannot change a repository. Nothing is
+  forked and no core row is disabled. A file row opens the file through the
+  ordinary file address, so the editor or a shipped preview claims it - the tab
+  needs neither. **git must be on `PATH`.** New package, so the first install
+  after this change needs a plain `install.bat` / `./install.sh` run or `-Force`.
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the

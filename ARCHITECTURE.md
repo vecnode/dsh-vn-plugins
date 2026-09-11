@@ -375,9 +375,79 @@ oneDark's dark canvas. Scheme truth order: the shipped
 lazily through `ctx.get('theme')` and followed via its `theme/change` event),
 else the `body[data-ds-dark-theme]` marker ui-layout writes (also observed, for
 a profile where ui-theme never lands), else `prefers-color-scheme`, else dark.
-The header control that switches the preference itself is §8.
+The header control that switches the preference itself is §9.
 
-## 7. The shared dialog surface (dsh-modal)
+## 7. The git tree tab (dsh-gittree)
+
+The pack's second tab type beside the editor, and the first one that is **pure
+addition**: it forks nothing, disables no core row, and ships no vendored code.
+
+It is a **page type** - no `patterns` - so it never competes for a file address:
+`sidebar://gittree` is its only address. It registers one guide entry (`order: 30`,
+after Files at 10 and Editor at 20), and both the chip and the guide capsule read
+"GitTree". The body is registered in the keyed `sidebar.right.pane.tab` seat under
+the same id, so it follows the two-stage contract every other type follows (§4).
+
+**What it shows.** A **Tree** view - every tracked file plus the changed and
+untracked ones, each with an `XY` status badge, directories collapsed by default,
+with a path filter and a changed-only switch that auto-expand folders - and a
+**History** view (`git log`; picking a commit shows its id, author, date, message
+body and the files it touched). The file bar carries the branch, the short HEAD,
+ahead/behind, `n changed - m files`, and the version marker.
+
+**How a row opens a file.** Exactly like a click in the Files tab: the tab
+record's own `openResource` action with a `dsh-resource://file/session/<id>/<path>`
+address and **no options**, so the registry's ranking decides - the editor for
+text, a shipped preview for an image or a PDF. The package therefore depends on
+neither, and it publishes no service of its own.
+
+**Where the data comes from.** Its Node half owns three authenticated,
+**read-only** routes registered through `connection.fetch` - the mechanism §6
+uses for the editor's file routes:
+
+| Route | Git behind it |
+|---|---|
+| `state` | `rev-parse --show-toplevel` / `--short HEAD`, `status --porcelain=v2 -z --untracked-files=all --branch`, `ls-files -z` |
+| `history` | `log -n N --date=short --pretty=format:...`, scoped with `-- <workspace>` when the workspace is a subfolder |
+| `commit` | `show -s --pretty=format:...` plus `diff-tree --root --no-commit-id --name-status -r -z` |
+
+The rules that make that safe to own:
+
+- **Read-only by construction.** The only subcommands reachable are `rev-parse`,
+  `status`, `ls-files`, `log`, `show` and `diff-tree`. Nothing stages, commits,
+  checks out, fetches or writes a config value, so no request - however malformed -
+  can change a repository.
+- **argv, never a shell.** `spawn('git', [...])`, with every element a literal in
+  `lib/index.js` plus at most a commit id validated against
+  `/^[0-9a-fA-F]{4,40}$/`; `--all` and friends are refused as `BAD_REQUEST`, so a
+  client string can never become a git option.
+- **A pinned environment and real bounds.** `GIT_OPTIONAL_LOCKS=0`,
+  `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C`, `--no-pager`, a 10 s kill, an 8 MiB output
+  cap, and typed failures (`NO_WORKSPACE`, `NOT_A_REPO`, `GIT_MISSING`,
+  `TIMEOUT`, `TOO_LARGE`, `GIT_FAILED`) that the surface renders as a headline
+  instead of "failed".
+- **Scope by realpath.** When the conversation folder is a subfolder of the
+  repository, the tree and the history are scoped to it and every path is
+  reported workspace-relative. Both sides of that comparison are resolved with
+  `realpath` first: a session header can carry a Windows 8.3 short path
+  (`LUISAR~1`) or a symlinked path while git answers with the long one, and
+  `path.relative` across two spellings of the same folder produces nonsense - it
+  produced an empty tree and a `git log` that rejected its own pathspec during
+  development, which is exactly what the tracked check now pins.
+- **Parsed as wire format, not string-matched.** `status --porcelain=v2 -z` is
+  walked as NUL-separated tokens (a rename's source path is the *next* token, and
+  a path may contain spaces), and `diff-tree -z` yields `STATUS\0path\0` pairs.
+  `--root` is what makes a repository's first commit list its files at all.
+- **Lazy.** Nothing runs until the tab is shown, and the History request waits for
+  the History view. Every answer is `no-store`.
+
+**Why a separate package and not a view inside the editor.** The editor is a
+document surface with its own lifecycle (CodeMirror, the save path, the rendered
+Markdown body); the git tree is a read-only browser of the same folder. Separate
+packages mean separate rows, separate versions and separate checks - and a profile
+can install one without the other.
+
+## 8. The shared dialog surface (dsh-modal)
 
 Alpha.4 gave the editor a save-as dialog, and the same dialog is what any other
 plugin of this pack (or a deployment's own) should reach for, so it lives in its
@@ -410,7 +480,7 @@ Design points worth keeping:
   reacts to the same key. Mask click and Cancel cancel; none of them fires while
   `submit` is in flight.
 
-## 8. The Themes control (dsh-themes)
+## 9. The Themes control (dsh-themes)
 
 The conversation header's right-hand group is a slot list
 (`conversation.session.header.utilities`): the shipped **Open In…** split button
@@ -527,7 +597,7 @@ body [data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/
   `dsh-editor` still renders Markdown, just with no way back to a text surface,
   which is the shipped behaviour anyway.
 
-## 9. The file-manager half of Open In (dsh-open-in-app)
+## 10. The file-manager half of Open In (dsh-open-in-app)
 
 The Session header's **"Open In…"** split button comes from the shipped
 `@deepseek-ai/dsh-client-ui-open-in-app` + `@deepseek-ai/dsh-host-open-in-app`
@@ -568,7 +638,7 @@ data in `sync-vendored.ps1`: a harness bump that moves the patched code fails th
 re-sync loudly instead of shipping a fork that silently lost its behavior, and
 the generated banner lists the applied patches.
 
-## 10. The installer
+## 11. The installer
 
 The installer is **two halves, one behaviour** - the host picks the half, and
 neither half needs the other:
@@ -619,14 +689,14 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
   reach the profile.
 - **Live links**: the web profile installs every bundle (`dsh-vn-master` — the
   blank master, so a profile that lists it still gets no client half — plus
-  `dsh-rightbar`, `dsh-rightbar-files`, `dsh-editor`, `dsh-modal`, `dsh-themes`,
-  `dsh-open-in-app`) as `pnpm link:` symlinks straight into this repo (detected by
+  `dsh-rightbar`, `dsh-rightbar-files`, `dsh-editor`, `dsh-gittree`, `dsh-modal`,
+  `dsh-themes`, `dsh-open-in-app`) as `pnpm link:` symlinks straight into this repo (detected by
   `Test-LiveLink` / `is_live_link()`, comparing realpaths case-insensitively on
   Windows). Code edits then already apply - a restart of
   `npx @deepseek-ai/dsh web` plus a hard browser refresh is all it takes; the
   installer prints that instead of re-adding.
 - **Fork re-sync**: `scripts/sync-vendored.ps1` is the installer's sibling for
-  the three forked client bundles (§4, §9). It is *not* run by the installers -
+  the three forked client bundles (§4, §10). It is *not* run by the installers -
   moving a fork forward is a reviewed change, not an install step. Its candidate
   roots cover the profile, the Windows npm cache (`%LOCALAPPDATA%`/`%APPDATA%`),
   `~/.npm/_npx`, and the POSIX global module directories.
@@ -639,7 +709,7 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
   `dsh-rightbar` also removes the disables, so the shipped rows come back on the
   next boot.
 
-## 11. Versioning and upgrade path
+## 12. Versioning and upgrade path
 
 - `.dsh-version.json` pins the dsh line, the `vendoredFrom` line the fork was
   taken from, and per-package versions.
@@ -651,12 +721,12 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
   the keyed tab seats with their framework props (`useTabInfo`, `sessionId`,
   `useSessions`) - both of which this pack now owns, so a change there is a
   merge into the fork rather than a break - the patched `launch()` of the
-  open-in-app client bundle (§9, the re-sync fails loudly when it moves), and, on
+  open-in-app client bundle (§10, the re-sync fails loudly when it moves), and, on
   the Node side, the route registration surface (`connection.fetch.register`,
   where a route must declare `requestBody` or its handler never runs) and the
   session-root lookup.
 
-## 12. Troubleshooting quick table
+## 13. Troubleshooting quick table
 
 | Symptom | Cause / action |
 |---|---|
@@ -680,6 +750,10 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
 | No Themes button in the header | `dsh-themes` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or the row did not land: check the console for `[dsh-themes]` |
 | The Themes button is greyed out | the `theme` service never appeared, so `@deepseek-ai/dsh-client-ui-theme` (row `ui-theme`) is not in the boot graph; the tooltip says "The theme service is unavailable" |
 | Fork drift after a harness update | `scripts/sync-vendored.ps1 -Check` exits 1; run it without `-Check` and review the diff |
+| No "GitTree" capsule on the "+" / Start page | `dsh-gittree` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or its client bundle did not activate - check the console for `[dsh-gittree]` |
+| The GitTree tab says "Not a git repository" | the conversation folder is not inside a repository: the route runs `git rev-parse --show-toplevel` from it and answers a typed `NOT_A_REPO` instead of guessing |
+| The GitTree tab says "git is not installed" | `git` is not on the **server's** `PATH` (the routes spawn it directly and report `GIT_MISSING`); install git on the host running `dsh web` |
+| The GitTree tree is empty although the folder has files | the folder lives inside a repository whose root is higher up, so entries outside the conversation folder are deliberately hidden; check `git status` in that folder |
 | Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; both halves read it from `node_modules/.modules.yaml` and auto-match - re-run the installer |
 | `-Target desktop` is rejected | intentional: DSH Desktop is no longer a target of this pack |
 | `.ps1` parse error after editing | non-ASCII character crept in (smart quotes/dash); keep scripts ASCII-only |

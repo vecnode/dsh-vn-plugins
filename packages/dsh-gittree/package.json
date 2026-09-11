@@ -1,0 +1,29 @@
+{
+  "name": "dsh-gittree",
+  "version": "0.1.0-alpha.1",
+  "description": "GitTree: a READ-ONLY git tab type for the dsh-vn-plugins right bar (dsh-rightbar). Lists the session workspace's git tree with a status badge per file, opens any file through the ordinary file address (so the editor or a shipped preview claims it), and shows the commit history with a commit's changed files. A page type like the editor: one guide entry on the tab strip's + / Start page, no core patches, nothing forked, and no git command that can write. Alpha.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-session",
+        "dsh-rightbar"
+      ]
+    }
+  },
+  "license": "MIT"
+}

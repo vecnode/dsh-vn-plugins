@@ -542,6 +542,52 @@ const chrome = chromeTag ? chromeTag.textContent : ''
 check('chrome rule injected', chrome.includes('[data-document-viewer-menu]{display:none}'))
 check('chrome scoped to markdown', chrome.includes('body [data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown"]'))
 
+// --------------------------------------------------------------- dsh-gittree
+const gitTree = loadBundle('packages/dsh-gittree/lib/client.js', {})
+const gitCssTag = gitTree.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-gittree/gittree.css').pop()
+const gitCss = gitCssTag ? gitCssTag.textContent : ''
+check('gittree bundle id', gitTree.id, 'dsh-gittree')
+check('gittree inject', JSON.stringify(gitTree.exports.inject), '["slots","sidebarRightTabs"]')
+check('gittree stylesheet injected', gitCss.includes('.dsg-root{') && gitCss.includes('.dsg-badge[data-st="m"]'))
+const gitTypes = []
+const gitSeats = {}
+const gitTabTypes = { register: (definition) => (gitTypes.push(definition), () => {}), entries: () => [] }
+gitTree.exports.apply({
+  slots: {
+    inject: (name, fn) => fn(),
+    register(spec, component) {
+      gitSeats[spec.name + (spec.key ? '#' + spec.key : '')] = { spec, component }
+      return () => {}
+    },
+  },
+  sidebarRightTabs: gitTabTypes,
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+check('gittree type registered', gitTypes.length === 1 && gitTypes[0].id + '/' + gitTypes[0].kind, 'dsh-gittree/gittree')
+// A page type: no `patterns`, so it never competes for a file address.
+check('gittree is a page type', gitTypes[0].patterns === undefined)
+check('gittree chip title', gitTypes[0].title('sidebar://gittree'), 'GitTree')
+check('gittree guide entry', gitTypes[0].guide.map((entry) => entry.order + ':' + entry.title()).join(','), '30:GitTree')
+check(
+  'gittree seats',
+  Object.keys(gitSeats).sort().join(','),
+  'sidebar.right.pane.tab#dsh-gittree,sidebar.right.pane.tab.title#dsh-gittree',
+)
+const GitTreeBody = gitSeats['sidebar.right.pane.tab#dsh-gittree'].component
+const gitTab = { id: 'tab9', contentId: 'sidebar://gittree', title: 'GitTree', navigation: { revision: 0 } }
+const gitMarkup = renderToStaticMarkup(h(GitTreeBody, { useTabInfo: () => ({ tab: gitTab }), sessionId: 's1' }))
+check('gittree body renders', gitMarkup.includes('data-gittree-tab="tab9"') && gitMarkup.includes('data-gittree-state="loading"'))
+check(
+  'gittree body offers both views',
+  gitMarkup.includes('data-gittree-view="tree"') && gitMarkup.includes('data-gittree-view="history"'),
+)
+check(
+  'gittree title seat draws the chip',
+  renderToStaticMarkup(h(gitSeats['sidebar.right.pane.tab.title#dsh-gittree'].component, {})),
+  '<span class="dsg-title">GitTree</span>',
+)
+
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')
 process.exitCode = failures === 0 ? 0 : 1
