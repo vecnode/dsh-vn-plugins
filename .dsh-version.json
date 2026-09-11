@@ -37,10 +37,10 @@
       ]
     },
     "dsh-gittree": {
-      "version": "0.1.0-alpha.1",
+      "version": "0.1.0-alpha.2",
       "rows": ["gittree"],
       "rowOverrides": [],
-      "role": "the workspace's git tree and history as a page tab type (guide order 30, after Files and Editor); its Node half owns read-only /api/dsh-gittree routes - no fork, no core row disabled, nothing for sync-vendored.ps1 to track",
+      "role": "the workspace's COMMIT HISTORY as a page tab type (guide order 30, after Files and Editor), with the branch and current commit in its file bar; its Node half owns read-only /api/dsh-gittree routes, and the tab reads state with brief=1 so no file list is ever built - no fork, no core row disabled, nothing for sync-vendored.ps1 to track",
       "uses": ["dsh-rightbar", "git on PATH"]
     },
     "dsh-modal": {

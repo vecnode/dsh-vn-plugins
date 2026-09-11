@@ -373,14 +373,42 @@ function mergeEntries(trackedText, statusEntries, prefix) {
   return [...map.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
 }
 
-/** GET /api/dsh-gittree/state — the workspace's git tree and status. */
+/** GET /api/dsh-gittree/state — the workspace's git facts (and, fully, its tree). */
 async function handleState(ctx, request) {
   try {
     const url = new URL(request.url)
     const sessionId = url.searchParams.get('session') || ''
+    // `brief=1` is the form the tab uses: the branch, the current commit and how
+    // many files changed - nothing else. The file list is not built at all (no
+    // `ls-files`, no merge), because the History-only surface never shows it.
+    const brief = url.searchParams.get('brief') === '1'
     const repo = await repoInfo(ctx, sessionId)
     const statusText = await runGit(repo.root, ['status', '--porcelain=v2', '-z', '--untracked-files=all', '--branch'])
     const parsed = parseStatus(statusText)
+    let head = ''
+    try {
+      head = (await runGit(repo.root, ['rev-parse', '--short', 'HEAD'])).trim()
+    } catch (err) {
+      // An unborn branch has no commit to name.
+      head = ''
+    }
+    if (brief) {
+      const scoped = parsed.entries.filter((entry) => scopePath(entry.path, repo.prefix) !== null)
+      return json(200, {
+        ok: true,
+        brief: true,
+        root: repo.cwd,
+        repoRoot: repo.root,
+        scope: repo.scope,
+        branch: parsed.info.branch,
+        head,
+        detached: parsed.info.detached,
+        upstream: parsed.info.upstream,
+        ahead: parsed.info.ahead,
+        behind: parsed.info.behind,
+        changed: scoped.length,
+      })
+    }
     let trackedText = ''
     try {
       trackedText = await runGit(repo.root, ['ls-files', '-z'])
@@ -390,13 +418,6 @@ async function handleState(ctx, request) {
       if (err && (err.code === 'GIT_MISSING' || err.code === 'TIMEOUT' || err.code === 'TOO_LARGE')) throw err
     }
     const all = mergeEntries(trackedText, parsed.entries, repo.prefix)
-    let head = ''
-    try {
-      head = (await runGit(repo.root, ['rev-parse', '--short', 'HEAD'])).trim()
-    } catch (err) {
-      // An unborn branch has no commit to name.
-      head = ''
-    }
     const truncated = all.length > MAX_ENTRIES
     const entries = truncated ? all.slice(0, MAX_ENTRIES) : all
     return json(200, {

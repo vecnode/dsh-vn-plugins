@@ -579,8 +579,16 @@ const gitTab = { id: 'tab9', contentId: 'sidebar://gittree', title: 'GitTree', n
 const gitMarkup = renderToStaticMarkup(h(GitTreeBody, { useTabInfo: () => ({ tab: gitTab }), sessionId: 's1' }))
 check('gittree body renders', gitMarkup.includes('data-gittree-tab="tab9"') && gitMarkup.includes('data-gittree-state="loading"'))
 check(
-  'gittree body offers both views',
-  gitMarkup.includes('data-gittree-view="tree"') && gitMarkup.includes('data-gittree-view="history"'),
+  'gittree body is history-only',
+  gitMarkup.includes('data-gittree-reload') &&
+    gitMarkup.includes('data-gittree-address="sidebar://gittree"') &&
+    gitMarkup.includes('dsh-gittree 0.1.0-alpha.2'),
+)
+check(
+  'gittree has no file-tree view',
+  gitMarkup.includes('data-gittree-view') === false &&
+    gitMarkup.includes('data-gittree-filter') === false &&
+    gitMarkup.includes('data-gittree-changed') === false,
 )
 check(
   'gittree title seat draws the chip',

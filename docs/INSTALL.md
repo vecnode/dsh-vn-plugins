@@ -81,17 +81,9 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 1. Start (or restart) `npx @deepseek-ai/dsh web` and open/select a conversation.
 2. Open the right Sidebar with the **expand button** in the conversation header
    (top right). It opens on the shipped **Start** page, whose capsules list the
-   Files tab, the new **Editor** and **GitTree** (the workspace's git tree and
-   commits — it needs `git` on the `PATH` of the host running `dsh web`). The tab
-   strip's **"+"** opens that Start page again at any time.
-3. Click a **text/code file** in the Files tab — or in **GitTree** — to open it in
-   the **Editor**: **Markdown included**, where `.md` opens as editable text and
-   its toolbar's **Preview** button (or the rendered page's **Edit** button) flips
-   between the editor and the rendered view on the same tab. Images and PDFs keep
-   their own preview tabs. Picking *Editor* from the "+" page starts a **blank**
-   file: **Save** (or Ctrl+S) asks for its name with its extension and creates it
-   in the conversation folder.
-4. Enter your API key in **Settings → Models** — installers never touch keys.
+   Files tab, the new **Editor** and **GitTree** — the workspace’s commit
+   history — it needs `git` on the `PATH` of the host running `dsh web`). The tab
+   strip’s **"+"** opens that Start page again at any time.
 
 ## Troubleshooting
 
@@ -165,6 +157,10 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   a new package needs one install run (`install.bat` / `./install.sh`, or
   `-Force`), then a restart. Check the console for `[dsh-gittree]` if it still
   does not show.
+- **GitTree sits on "Reading the history…" and never stops** — that was
+  alpha.1’s bug (an effect cleanup cancelled the request it had just
+  started). alpha.2 guards every request with a token; confirm the served bundle
+  prints alpha.2 or later in the file bar and hard-refresh (Ctrl+F5).
 - **GitTree says "Not a git repository"** — the conversation folder is not inside
   a repository. The tab reports that instead of guessing; open a session whose
   workspace is a repository (or run `git init` in it).

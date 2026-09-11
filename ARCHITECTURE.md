@@ -388,14 +388,16 @@ after Files at 10 and Editor at 20), and both the chip and the guide capsule rea
 "GitTree". The body is registered in the keyed `sidebar.right.pane.tab` seat under
 the same id, so it follows the two-stage contract every other type follows (§4).
 
-**What it shows.** A **Tree** view - every tracked file plus the changed and
-untracked ones, each with an `XY` status badge, directories collapsed by default,
-with a path filter and a changed-only switch that auto-expand folders - and a
-**History** view (`git log`; picking a commit shows its id, author, date, message
-body and the files it touched). The file bar carries the branch, the short HEAD,
-ahead/behind, `n changed - m files`, and the version marker.
+**What it shows.** The **commit history** of the tab’s own conversation folder:
+short id, subject, author and date per row, newest first. Picking a commit opens its
+full id, author, date, message body and the files it touched, each of which opens that
+file in whatever claims it. The file bar above the list carries the branch, the short
+HEAD - the current commit - ahead/behind, how many files git reports as changed, and
+the version marker. There is no working-tree listing: the Files tab already browses the
+folder, and the tab reads the state route with `brief=1`, so no file list is ever built
+into an answer it would not show.
 
-**How a row opens a file.** Exactly like a click in the Files tab: the tab
+**How a row opens a file.** Every file row - a commit’s changed file - opens the same way a click in the Files tab does: the tab
 record's own `openResource` action with a `dsh-resource://file/session/<id>/<path>`
 address and **no options**, so the registry's ranking decides - the editor for
 text, a shipped preview for an image or a PDF. The package therefore depends on
@@ -407,7 +409,7 @@ uses for the editor's file routes:
 
 | Route | Git behind it |
 |---|---|
-| `state` | `rev-parse --show-toplevel` / `--short HEAD`, `status --porcelain=v2 -z --untracked-files=all --branch`, `ls-files -z` |
+| `state` (`brief=1` is the tab’s form) | `rev-parse --show-toplevel` / `--short HEAD`, `status --porcelain=v2 -z --untracked-files=all --branch`; `ls-files -z` and the entry merge only in the full form |
 | `history` | `log -n N --date=short --pretty=format:...`, scoped with `-- <workspace>` when the workspace is a subfolder |
 | `commit` | `show -s --pretty=format:...` plus `diff-tree --root --no-commit-id --name-status -r -z` |
 
@@ -438,6 +440,12 @@ The rules that make that safe to own:
   walked as NUL-separated tokens (a rename's source path is the *next* token, and
   a path may contain spaces), and `diff-tree -z` yields `STATUS\0path\0` pairs.
   `--root` is what makes a repository's first commit list its files at all.
+- **Tokens, not effect cleanups.** Every request carries a `useRef` token and applies
+  its answer only while it is still the newest one. alpha.1 returned a cleanup from the
+  effect instead, so the next render - the one its own `setState` caused - ran that
+  cleanup, marked the request stale and dropped the answer, and the panel sat on
+  "Reading the history…" forever. That is the shape the request code in
+  `lib/client.js` warns about.
 - **Lazy.** Nothing runs until the tab is shown, and the History request waits for
   the History view. Every answer is `no-store`.
 

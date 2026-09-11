@@ -200,6 +200,12 @@ if (!hasGit) {
   check('gittree: a modified file is marked', (byPath['sub/inner.txt'] || '').indexOf('M') >= 0)
   check('gittree: an untracked file is marked', byPath['new file.txt'], '??')
   check('gittree: counts the changed files', state.payload.changed >= 2)
+  // `brief=1` is the tab's own form: the facts the bar shows, and no file list.
+  const brief = await ask(stateHandler, stateRoute, 'session=' + session + '&brief=1')
+  check('gittree: brief state answers', brief.status, 200)
+  check('gittree: brief names the commit', brief.payload.head, state.payload.head)
+  check('gittree: brief counts the changes', brief.payload.changed, state.payload.changed)
+  check('gittree: brief sends no file list', brief.payload.entries === undefined && brief.payload.total === undefined)
   const history = await ask(historyHandler, historyRoute, 'session=' + session + '&limit=5')
   const commits = history.payload && Array.isArray(history.payload.commits) ? history.payload.commits : []
   check('gittree: history answers', history.status, 200)

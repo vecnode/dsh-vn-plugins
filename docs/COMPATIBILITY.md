@@ -44,13 +44,15 @@ The pack targets the harness line DeepSeek ships to the raw web install
   tab) goes through the plugin's own authenticated route; the session's
   workspace root is resolved host-side from the live session header or session
   persistence.
-- **dsh-gittree** adds the GitTree page tab: the workspace's git tree (status
-  badges, path filter, changed-only switch) and its commit history, read through
-  the package's own **read-only** `/api/dsh-gittree/*` routes. It replaces
-  nothing and publishes no service, so it cannot disturb the bar's tab-type
-  chain; a row click opens the file through the ordinary
-  `dsh-resource://file/...` address, which the editor or a shipped preview then
-  claims. **git must be on `PATH`** for its routes to answer.
+- **dsh-gittree** adds the GitTree page tab: the workspace’s **commit history**
+  (short id, subject, author, date), with the branch and the current commit kept in
+  its file bar, read through the package’s own **read-only**
+  `/api/dsh-gittree/*` routes (the tab uses their `brief=1` form, so it never builds
+  a file list). Picking a commit shows its message and the files it touched, and a
+  file row opens the file through the ordinary `dsh-resource://file/...` address,
+  which the editor or a shipped preview then claims. It replaces nothing and
+  publishes no service, so it cannot disturb the bar’s tab-type chain.
+  **git must be on `PATH`** for its routes to answer.
 - **dsh-modal** provides the shared `modals` client service the editor's save-as
   dialog uses. It owns no slot and no ordering edge, and the editor resolves it
   lazily (falling back to the browser's own prompt), so neither plugin requires
@@ -163,6 +165,16 @@ The pack targets the harness line DeepSeek ships to the raw web install
   ordinary file address, so the editor or a shipped preview claims it - the tab
   needs neither. **git must be on `PATH`.** New package, so the first install
   after this change needs a plain `install.bat` / `./install.sh` run or `-Force`.
+
+- **gittree alpha.2**: the tab is **history-only** - the working-tree listing, its path
+  filter, its changed-only switch and the viewer switch are gone; what remains is the
+  commit list plus the branch and the current commit in the file bar, and a commit’s
+  message and changed files when one is picked. The state route gained a `brief=1`
+  form for exactly those bar facts, so the tab never builds a file list. It also fixes
+  a real hang: alpha.1 returned an effect cleanup that ran on the very next render -
+  the one its own `setState` caused - and cancelled the request the effect had just
+  started, so the panel sat on "Reading the history…" forever. Every request
+  now carries a `useRef` token and applies its answer only while it is the newest one.
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the
