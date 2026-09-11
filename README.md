@@ -2,9 +2,7 @@
 
 ![Language: JavaScript](https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
-
 ![DeepSeek Harness 0.1.5-rc.1](https://img.shields.io/badge/dsh-0.1.5--rc.1-4f8cff)
-![Target: web profile](https://img.shields.io/badge/target-web%20profile-blueviolet)
 
 Personal plugin pack for **DeepSeek Harness**.
 
@@ -12,7 +10,7 @@ Everything ships as standard **dsh bundles**. The plugins are
 plain JavaScript, and the launchers run on **Windows, macOS and Linux** — the
 Windows half is PowerShell, the macOS/Linux half is plain POSIX shell.
 
-## Plugins (all **alpha** until the owner promotes them)
+## Plugins (all **alpha**)
 
 Each package's own README is the reference for what it does, why it is built that
 way and what it touches; the table below is the map.
