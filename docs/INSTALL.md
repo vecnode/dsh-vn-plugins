@@ -81,7 +81,7 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 1. Start (or restart) `npx @deepseek-ai/dsh web` and open/select a conversation.
 2. Open the right Sidebar with the **expand button** in the conversation header
    (top right). It opens on the shipped **Start** page, whose capsules list the
-   Files tab, the new **Editor** and **GitTree** — the workspace’s commit
+   Files tab, the new **Editor** and **History** — the workspace’s commit
    history — it needs `git` on the `PATH` of the host running `dsh web`). The tab
    strip’s **"+"** opens that Start page again at any time.
 
@@ -153,20 +153,20 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   theme's own stylesheets at boot, and it injects nothing when it cannot read
   them (forcing white without the tokens would be worse). Reinstall so
   `dsh-themes` alpha.3+ is in the profile, then restart.
-- **No "GitTree" capsule on the "+" / Start page** — `dsh-gittree` is not mounted;
+- **No "History" capsule on the "+" / Start page** — `dsh-gittree` is not mounted;
   a new package needs one install run (`install.bat` / `./install.sh`, or
   `-Force`), then a restart. Check the console for `[dsh-gittree]` if it still
   does not show.
-- **GitTree sits on "Reading the history…" and never stops** — that was
+- **History sits on the "Reading the history…" and never stops** — that was
   alpha.1’s bug (an effect cleanup cancelled the request it had just
   started). alpha.2 guards every request with a token; confirm the served bundle
   prints alpha.2 or later in the file bar and hard-refresh (Ctrl+F5).
-- **GitTree says "Not a git repository"** — the conversation folder is not inside
+- **History says "Not a git repository"** — the conversation folder is not inside
   a repository. The tab reports that instead of guessing; open a session whose
   workspace is a repository (or run `git init` in it).
-- **GitTree says "git is not installed"** — `git` is missing from the `PATH` of
+- **History says "git is not installed"** — `git` is missing from the `PATH` of
   the host running `dsh web` (the routes spawn it directly).
-- **GitTree opens a file in the wrong tab, or not at all** — the row hands the
+- **History opens a file in the wrong tab, or not at all** — the row hands the
   file to the ordinary address and lets the registry decide; with neither
   `dsh-editor` nor a shipped preview claiming that extension, nothing can draw
   it. That is the same rule the Files tab follows.

@@ -16,7 +16,7 @@
  *     seats `sidebar.right.pane.tab` / `sidebar.right.pane.tab.title` under that
  *     same id, exactly like the tab types the product ships;
  *   - it contributes a guide entry, so the tab strip's "+" control (which opens
- *     the "Start" page) offers **GitTree** at `order: 30` - after Files (10) and
+ *     the "Start" page) offers **History** at `order: 30` - after Files (10) and
  *     Editor (20);
  *   - the file bar keeps the workspace's git facts: the branch (or `(detached)`),
  *     the short HEAD commit, `ahead`/`behind` when there is an upstream, and how
@@ -27,7 +27,7 @@
  *     file row inside that detail opens the file with the tab record's own
  *     `openResource` action and a `dsh-resource://file/session/<id>/<path>`
  *     address - **no options** - so the registry's ranking decides what claims
- *     it. The GitTree tab stays open;
+ *     it. The History tab stays open;
  *   - the surface follows the pack's tab dress (the toolbar and file-bar geometry
  *     and `--dsw-*` tokens the editor and the Files tab use, under its own `dsg-`
  *     prefix), so it reads as one more tab of the same bar and uninstalls without
@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the tool bar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.2'
+    const PLUGIN_VERSION = '0.1.0-alpha.3'
     /** The keyed seats every tab type occupies. */
     const TAB_SLOT = 'sidebar.right.pane.tab'
     const TITLE_SLOT = 'sidebar.right.pane.tab.title'
@@ -190,7 +190,7 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     // Icons
     // ---------------------------------------------------------------------
-    /** The guide capsule's glyph (drawn before "GitTree" on the Start page). */
+    /** The guide capsule's glyph (drawn before "History" on the Start page). */
     function GitTreeGlyph(props) {
       const size = props && typeof props.size === 'number' ? props.size : 20
       return h(
@@ -383,7 +383,7 @@ window.__ModuleLoader__.load({
     // The tab body
     // ---------------------------------------------------------------------
     /**
-     * The GitTree surface: the workspace's commit history, with the bar above it
+     * The History surface: the workspace's commit history, with the bar above it
      * carrying the branch and the current commit. Both requests start when the tab
      * is shown (nothing runs on an idle GUI), and each answer is applied only
      * while its token is the newest - so a re-render can never cancel an in-flight
@@ -551,7 +551,7 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     /** The tab strip's label for this kind (the guide entry names the same word). */
     function GitTreeTitle() {
-      return h('span', { className: 'dsg-title' }, 'GitTree')
+      return h('span', { className: 'dsg-title' }, 'History')
     }
 
     // ---------------------------------------------------------------------
@@ -565,12 +565,12 @@ window.__ModuleLoader__.load({
         // history opens go through the ordinary `dsh-resource://file/**` grammar
         // and are claimed by whoever registers for it (the editor, a preview).
         priority: 'builtin',
-        title: () => 'GitTree',
+        title: () => 'History',
         guide: [
           {
             order: 30,
-            title: () => 'GitTree',
-            description: () => 'Browse this workspace\u2019s commits',
+            title: () => 'History',
+            description: () => 'Browse this workspace\u2019s commit history',
             icon: GitTreeGlyph,
           },
         ],

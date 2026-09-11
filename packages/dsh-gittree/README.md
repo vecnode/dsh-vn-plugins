@@ -1,6 +1,6 @@
-# dsh-gittree (alpha.2)
+# dsh-gittree (alpha.3)
 
-**GitTree** is a **tab type for the pack's right bar** (`dsh-rightbar` — the
+**History** is a **tab type for the pack's right bar**, and it is labelled History in the capsule and the chip while the package, the row and the address keep the `dsh-gittree` / `gittree` name (`dsh-rightbar` — the
 right-hand column of the DeepSeek Harness web GUI, beside the shipped **Start**
 page and the **Files** tab, and the pack's **Editor**). It shows the **commit
 history** of the tab's own conversation folder, with the branch and the current
@@ -22,25 +22,25 @@ It is a **page type**, exactly like the Editor's page tab: it declares no
 | `id` / slot key | `dsh-gittree` |
 | `kind` / address | `gittree` / `sidebar://gittree` |
 | `priority` | `builtin` |
-| guide entry | **GitTree**, `order: 30` — after Files (10) and Editor (20) |
+| guide entry | **History**, `order: 30` — after Files (10) and Editor (20) |
 | seats | the keyed `sidebar.right.pane.tab` / `sidebar.right.pane.tab.title` |
 | services | `slots` + the bar's `sidebarRightTabs` (nothing else) |
 
 The tab strip's **"+"** opens the Start page, which lists the guide entries;
-picking **GitTree** creates (or reveals) the page tab.
+picking **History** creates (or reveals) the page tab.
 
 A **file row inside a commit** calls the tab record's own `openResource` action
 with a `dsh-resource://file/session/<sessionId>/<path>` address and **no
 options** — the identical call the Files tab makes — so the registry's ranking
 decides what claims the file: the pack's editor for text, a shipped preview for
-an image or a PDF. The GitTree tab stays open beside it, and this package needs
+an image or a PDF. The History tab stays open beside it, and this package needs
 neither the editor nor any preview to exist.
 
 ## What it shows
 
 - The **file bar**: the branch (or `(detached)`), the short **HEAD** commit — the
   current commit — `↑ahead`/`↓behind` when there is an upstream, how many files
-  git reports as changed, and the version marker (`dsh-gittree 0.1.0-alpha.2`)
+  git reports as changed, and the version marker (`dsh-gittree 0.1.0-alpha.3`)
   that makes a freshly loaded bundle easy to verify.
 - The **commit list**: `short sha`, subject, author and date, newest first, up to
   80 commits per load. The toolbar's **Reload** refetches the bar and the list.

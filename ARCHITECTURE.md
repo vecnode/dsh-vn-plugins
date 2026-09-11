@@ -377,7 +377,7 @@ else the `body[data-ds-dark-theme]` marker ui-layout writes (also observed, for
 a profile where ui-theme never lands), else `prefers-color-scheme`, else dark.
 The header control that switches the preference itself is §9.
 
-## 7. The git tree tab (dsh-gittree)
+## 7. The History tab (dsh-gittree)
 
 The pack's second tab type beside the editor, and the first one that is **pure
 addition**: it forks nothing, disables no core row, and ships no vendored code.
@@ -385,7 +385,7 @@ addition**: it forks nothing, disables no core row, and ships no vendored code.
 It is a **page type** - no `patterns` - so it never competes for a file address:
 `sidebar://gittree` is its only address. It registers one guide entry (`order: 30`,
 after Files at 10 and Editor at 20), and both the chip and the guide capsule read
-"GitTree". The body is registered in the keyed `sidebar.right.pane.tab` seat under
+"History" - the label only: the package, the row, the kind and the address keep the `dsh-gittree` / `gittree` name. The body is registered in the keyed `sidebar.right.pane.tab` seat under
 the same id, so it follows the two-stage contract every other type follows (§4).
 
 **What it shows.** The **commit history** of the tab’s own conversation folder:
@@ -758,10 +758,10 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
 | No Themes button in the header | `dsh-themes` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or the row did not land: check the console for `[dsh-themes]` |
 | The Themes button is greyed out | the `theme` service never appeared, so `@deepseek-ai/dsh-client-ui-theme` (row `ui-theme`) is not in the boot graph; the tooltip says "The theme service is unavailable" |
 | Fork drift after a harness update | `scripts/sync-vendored.ps1 -Check` exits 1; run it without `-Check` and review the diff |
-| No "GitTree" capsule on the "+" / Start page | `dsh-gittree` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or its client bundle did not activate - check the console for `[dsh-gittree]` |
-| The GitTree tab says "Not a git repository" | the conversation folder is not inside a repository: the route runs `git rev-parse --show-toplevel` from it and answers a typed `NOT_A_REPO` instead of guessing |
-| The GitTree tab says "git is not installed" | `git` is not on the **server's** `PATH` (the routes spawn it directly and report `GIT_MISSING`); install git on the host running `dsh web` |
-| The GitTree tree is empty although the folder has files | the folder lives inside a repository whose root is higher up, so entries outside the conversation folder are deliberately hidden; check `git status` in that folder |
+| No "History" capsule on the "+" / Start page | `dsh-gittree` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or its client bundle did not activate - check the console for `[dsh-gittree]` |
+| The History tab says "Not a git repository" | the conversation folder is not inside a repository: the route runs `git rev-parse --show-toplevel` from it and answers a typed `NOT_A_REPO` instead of guessing |
+| The History tab says "git is not installed" | `git` is not on the **server's** `PATH` (the routes spawn it directly and report `GIT_MISSING`); install git on the host running `dsh web` |
+| The History list is empty although the repository has commits | the folder lives inside a repository whose root is higher up, so commits that never touch this folder are deliberately hidden; check `git log` in that folder |
 | Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; both halves read it from `node_modules/.modules.yaml` and auto-match - re-run the installer |
 | `-Target desktop` is rejected | intentional: DSH Desktop is no longer a target of this pack |
 | `.ps1` parse error after editing | non-ASCII character crept in (smart quotes/dash); keep scripts ASCII-only |

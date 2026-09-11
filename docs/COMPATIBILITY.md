@@ -44,7 +44,7 @@ The pack targets the harness line DeepSeek ships to the raw web install
   tab) goes through the plugin's own authenticated route; the session's
   workspace root is resolved host-side from the live session header or session
   persistence.
-- **dsh-gittree** adds the GitTree page tab: the workspace’s **commit history**
+- **dsh-gittree** adds the **History** page tab (its label; the package, row and address keep the `gittree` name): the workspace’s **commit history**
   (short id, subject, author, date), with the branch and the current commit kept in
   its file bar, read through the package’s own **read-only**
   `/api/dsh-gittree/*` routes (the tab uses their `brief=1` form, so it never builds
@@ -175,6 +175,11 @@ The pack targets the harness line DeepSeek ships to the raw web install
   the one its own `setState` caused - and cancelled the request the effect had just
   started, so the panel sat on "Reading the history…" forever. Every request
   now carries a `useRef` token and applies its answer only while it is the newest one.
+
+- **gittree alpha.3**: the tab is **renamed to History** in the capsule and the chip,
+  because it shows commits rather than a file tree. The label is all that changed: the
+  package, the row, the kind and the address keep the `dsh-gittree` / `gittree` name, so
+  an installed profile needs no re-add - only a restart and a hard refresh.
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the

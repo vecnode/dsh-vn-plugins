@@ -567,22 +567,22 @@ gitTree.exports.apply({
 check('gittree type registered', gitTypes.length === 1 && gitTypes[0].id + '/' + gitTypes[0].kind, 'dsh-gittree/gittree')
 // A page type: no `patterns`, so it never competes for a file address.
 check('gittree is a page type', gitTypes[0].patterns === undefined)
-check('gittree chip title', gitTypes[0].title('sidebar://gittree'), 'GitTree')
-check('gittree guide entry', gitTypes[0].guide.map((entry) => entry.order + ':' + entry.title()).join(','), '30:GitTree')
+check('gittree chip title', gitTypes[0].title('sidebar://gittree'), 'History')
+check('gittree guide entry', gitTypes[0].guide.map((entry) => entry.order + ':' + entry.title()).join(','), '30:History')
 check(
   'gittree seats',
   Object.keys(gitSeats).sort().join(','),
   'sidebar.right.pane.tab#dsh-gittree,sidebar.right.pane.tab.title#dsh-gittree',
 )
 const GitTreeBody = gitSeats['sidebar.right.pane.tab#dsh-gittree'].component
-const gitTab = { id: 'tab9', contentId: 'sidebar://gittree', title: 'GitTree', navigation: { revision: 0 } }
+const gitTab = { id: 'tab9', contentId: 'sidebar://gittree', title: 'History', navigation: { revision: 0 } }
 const gitMarkup = renderToStaticMarkup(h(GitTreeBody, { useTabInfo: () => ({ tab: gitTab }), sessionId: 's1' }))
 check('gittree body renders', gitMarkup.includes('data-gittree-tab="tab9"') && gitMarkup.includes('data-gittree-state="loading"'))
 check(
   'gittree body is history-only',
   gitMarkup.includes('data-gittree-reload') &&
     gitMarkup.includes('data-gittree-address="sidebar://gittree"') &&
-    gitMarkup.includes('dsh-gittree 0.1.0-alpha.2'),
+    gitMarkup.includes('dsh-gittree 0.1.0-alpha.3'),
 )
 check(
   'gittree has no file-tree view',
@@ -593,7 +593,7 @@ check(
 check(
   'gittree title seat draws the chip',
   renderToStaticMarkup(h(gitSeats['sidebar.right.pane.tab.title#dsh-gittree'].component, {})),
-  '<span class="dsg-title">GitTree</span>',
+  '<span class="dsg-title">History</span>',
 )
 
 console.log('')
