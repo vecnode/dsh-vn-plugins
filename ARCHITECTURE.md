@@ -302,6 +302,22 @@ Behaviours that follow from that table:
   ranking would hand the address straight back to this `extension`-band type. The
   hand-off refuses while the document is dirty - the preview reads the file from
   disk, and showing the older text silently would be a lie.
+- **The rendered page undoes the plain-text scrollport** (alpha.8). The shadow
+  body lives inside `[data-textpreview-body]`, which the shipped preview styles
+  for its *plain-text* renderer: `white-space:pre` and a monospace font stack.
+  The shipped Markdown body reset both in its own wrapper - the wrapper this
+  package's shadow body replaces - so the pack's `.dse-mdviewPaper` does the same
+  (`white-space:normal`, and the app's UI font on the **Edit** pill). Without the
+  reset a source newline is a hard break and every blank line renders as a full
+  empty line, which is what made a Markdown document look double-spaced on the
+  white page, and the pill inherited the monospace face unlike every button
+  around it. Both regressions came in with the alpha.7 shadow body and are fixed
+  by CSS in this package, not by touching the shipped preview.
+- **The rendered page has one viewer** (with dsh-themes alpha.3): the preview
+  header builds its viewer menu from *every* candidate implementation it resolved
+  for the file - the Markdown body plus the shipped plain-text fallback - so
+  `dsh-themes` hides that menu on Markdown tabs and the page's **Edit** button is
+  the one way back to the text.
 - "+" -> Start -> **Editor** creates the empty **page** tab, whose body is a
   blank CodeMirror document - nothing is read from disk, and there is no file
   browser inside the tab. **Save** (or Ctrl+S) on that document opens the shared
@@ -486,6 +502,31 @@ body [data-document-markdown]{ /* the theme's light layer, verbatim */ backgroun
 
 The way to this view for a Markdown file is the editor's **Preview** button (§6).
 
+**The Markdown chrome (alpha.3).** The same package carries the pack's second
+appearance override, and it is about shape rather than palette: a rendered
+Markdown page has exactly **one** viewer, but the shipped preview header builds its
+viewer menu from *every* candidate implementation it resolved for the file - the
+Markdown body plus the plain-text fallback - so a Markdown tab offered
+"Markdown" / "Plain text". The pack's answer to that file is the editor (the
+**Edit** button on the page, §6), never a second renderer, so the menu is hidden:
+
+```css
+body [data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown"]
+  [data-document-viewer-menu]{display:none}
+```
+
+- **Scoped by the selected renderer, not by guesswork.** The preview stamps the
+  chosen implementation's id into `data-document-preview` on the document root, so
+  a code or plain-text tab keeps its menu - there the choice between renderers is
+  real and the pack has no opinion about it.
+- **Static CSS, installed once, in its own tag** (`dsh-themes/markdown-chrome.css`):
+  there is no palette to read, so it does not need the paper's refresh cycle and
+  does not depend on the paper's read succeeding.
+- **Only that one control goes.** The path, the reload tool, the document and the
+  page's **Edit** button are untouched - and a profile that never installs
+  `dsh-editor` still renders Markdown, just with no way back to a text surface,
+  which is the shipped behaviour anyway.
+
 ## 9. The file-manager half of Open In (dsh-open-in-app)
 
 The Session header's **"Open In…"** split button comes from the shipped
@@ -629,6 +670,8 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
 | Clicking a file opens the read-only preview instead of the editor | the address was vetoed by `canOpen`: a preview-owned extension (html/image/pdf/…), a path outside the session workspace, or an `absolute/…` address. Markdown is NOT one of them - it opens in the editor |
 | Save-as says the name is taken / the folder is missing | `409 EXISTS` (pick another name - the dialog stays open with what you typed) or `404 NO_FOLDER` (a subfolder path must already exist; nothing creates directories) |
 | The rendered Markdown page has no **Edit** button | the editor's shadow body is not rendering: confirm the boot HTML lists `dsh-editor/client.js` at alpha.7+, and that the shipped body still registers under `sidebar.right.tab.document` keyed `@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown` (the key this pack's lower-priority entry shadows) |
+| The Markdown page is double-spaced, or its **Edit** pill looks monospaced | the preview's plain-text scrollport is leaking in (`[data-textpreview-body]` declares `white-space:pre` + a mono stack) - the pack's wrapper reset it from alpha.8 on; confirm the served `dsh-editor` bundle prints alpha.8+ and hard-refresh |
+| A Markdown tab still shows a "Markdown / Plain text" viewer menu | `dsh-themes` alpha.3 hides it (`body [data-document-preview="…/markdown"] [data-document-viewer-menu]`); reinstall so that version is in the profile, then restart |
 | Save-as shows no dialog, only a browser prompt | `dsh-modal` is not mounted, so the editor fell back to `window.prompt`; re-run the installer with `-Force` and restart to add the bundle |
 | The "Open In…" File Explorer entry still does nothing | the forked row is not the one running: confirm the boot HTML lists `dsh-open-in-app/client.js` and not `@deepseek-ai/dsh-client-ui-open-in-app`, and that `dsh-open-in-app`'s layer still disables `ui-open-in-app` |
 | Editor tab says "Could not open the file" / `NO_WORKSPACE` | the session root could not be resolved (session not live and not persisted yet) or the path is outside the conversation folder; open the conversation once so its header is available |

@@ -34,8 +34,9 @@ The pack targets the harness line DeepSeek ships to the raw web install
     (stage two: what a tab draws),
   - the `extension` priority band, so text files open editable rather than in
     the shipped read-only viewer; `canOpen` vetoes every extension the shipped
-    previews own (md/markdown/html/images/pdf/office/archive/media/binary) and
-    every path outside the session workspace,
+    previews own (html/images/pdf/office/archive/media/binary) and every path
+    outside the session workspace - **Markdown is not one of them** (it is text
+    and the editor claims it, with the rendered view one click away),
   - a `guide` entry, which is what the tab strip's "+" control lists.
 - The workspace tree it opens files from is the pack's Files tab over
   `remote.workspaceFiles` (a shipped host service, not a UI dependency). That
@@ -57,7 +58,9 @@ The pack targets the harness line DeepSeek ships to the raw web install
   pack's appearance overrides: the **Markdown paper**, one rule that re-declares
   ui-theme's own light declarations on the shipped preview's
   `[data-document-markdown]` root, so the rendered Markdown view stays white in
-  the dark theme.
+  the dark theme, and the **Markdown chrome**, one static rule that hides the
+  preview header's viewer menu on Markdown tabs (the page has exactly one
+  renderer; the editor's **Edit** button is the way back).
 - The shipped `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` row stays
   enabled: it only consumes `sidebarRightTabs` and the keyed seat, so the
   code/image/PDF/HTML previews keep working inside the pack's bar, and the editor
@@ -131,6 +134,15 @@ The pack targets the harness line DeepSeek ships to the raw web install
   `ui-sidebar-files` disables stay in `dsh-rightbar`, next to the rows they
   replace. New package, so the first install after this change needs a plain
   `install.bat` / `./install.sh` run or `-Force`.
+- **editor alpha.8 / themes alpha.3**: two fixes on the rendered Markdown page.
+  The editor's shadow body (alpha.7) replaced the shipped wrapper that undid the
+  preview scrollport's plain-text styling, so the page inherited `white-space:pre`
+  (a source newline became a hard break and every blank line a full empty line -
+  the double-spaced look) and the **Edit** pill inherited the monospace stack;
+  the pack's own wrapper now resets both. And because a Markdown page has exactly
+  one viewer, `dsh-themes` hides the preview header's viewer menu on Markdown
+  tabs, so "Plain text" is no longer offered beside "Markdown" - the editor's
+  **Edit** button is the way back to the text. No new packages.
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the

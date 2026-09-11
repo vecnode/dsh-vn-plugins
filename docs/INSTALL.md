@@ -137,12 +137,20 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   the shipped `@deepseek-ai/dsh-client-ui-theme` service (row `ui-theme`) is not
   in the boot graph — the tooltip says "The theme service is unavailable".
 - **Code text looks black-on-dark in the light theme** — the editor follows the
-  app's appearance; confirm the served `dsh-editor` bundle prints alpha.7 or
+  app's appearance; confirm the served `dsh-editor` bundle prints alpha.8 or
   later in a tab's file bar and hard-refresh (Ctrl+F5).
+- **Blank lines in a Markdown file render as full empty lines, or the "Edit"
+  button looks monospaced** — the preview's plain-text scrollport
+  (`white-space:pre` + the mono font stack) leaking into the rendered page; fixed
+  in `dsh-editor` alpha.8. Confirm the served bundle prints alpha.8 or later and
+  hard-refresh (Ctrl+F5).
 - **"Preview" says it is unavailable** — the right bar's controller could not be
   reached (the bar must be mounted, which it is while the editor tab is on
   screen) or the shipped document preview is not in the graph; the banner says
   which.
+- **A Markdown tab still offers "Markdown" / "Plain text" in its header** — that
+  viewer menu is hidden on Markdown tabs by `dsh-themes` alpha.3; reinstall so
+  that version is in the profile, then restart.
 - **The rendered Markdown page has no "Edit" button** — that button is the
   editor's own document body, which shadows the shipped one at a lower slot
   priority; confirm the boot HTML lists `dsh-editor/client.js` at alpha.7+ and
@@ -151,4 +159,4 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   `dsh-themes`' Markdown paper: it copies ui-theme's light palette out of the
   theme's own stylesheets at boot, and it injects nothing when it cannot read
   them (forcing white without the tokens would be worse). Reinstall so
-  `dsh-themes` alpha.2+ is in the profile, then restart.
+  `dsh-themes` alpha.3+ is in the profile, then restart.

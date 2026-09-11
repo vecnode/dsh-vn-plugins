@@ -26,7 +26,12 @@
  *     tab's place. Since alpha.7 that preview is a **toggle**: this package also
  *     registers the rendered Markdown DOCUMENT body (shadowing the shipped one
  *     through the keyed slot's priority rule), and that body carries an **Edit**
- *     button which hands the same file straight back to this editor;
+ *     button which hands the same file straight back to this editor. Since
+ *     alpha.8 that shadow body also **undoes what the plain-text scrollport
+ *     imposes** on its contents (`white-space:pre` and the mono font stack, see
+ *     the `.dse-mdview*` rules): a source newline is a soft break again instead
+ *     of a hard one, and the Edit pill uses the app's UI font like every other
+ *     button around it;
  *   - it contributes a guide entry, so the tab strip's "+" control - which
  *     opens the "Start" page - offers "Editor". Picking it creates an editor
  *     tab that opens on a BLANK document: nothing is read from disk until the
@@ -104,7 +109,7 @@ window.__ModuleLoader__.load({
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the toolbar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.7'
+    const PLUGIN_VERSION = '0.1.0-alpha.8'
     /** The client service dsh-modal provides; resolved lazily, never required. */
     const MODAL_SERVICE = 'modals'
     /** The client service @deepseek-ai/dsh-client-ui-theme provides; resolved lazily too. */
@@ -178,12 +183,19 @@ window.__ModuleLoader__.load({
 /* The rendered Markdown view: the editor's own document body inside the shipped
    preview. The bar is a sticky overlay so the way back to editing stays in reach
    while the page scrolls; it ignores pointer events except on the button, so it
-   never blocks selecting text underneath. */
+   never blocks selecting text underneath.
+   Two resets are load-bearing here (alpha.8), because the preview's scrollport is
+   built for the PLAIN-TEXT renderer: [data-textpreview-body] declares
+   white-space:pre and the mono font stack, and the shipped Markdown body undid
+   both in its own wrapper (._0RKuNG_document) - the wrapper this shadow body
+   replaces. Without them the page inherits "pre": every newline in the source
+   becomes a hard break and every blank line a full empty line ("huge spaces"),
+   and the Edit pill renders in the mono face, unlike every button around it. */
 .dse-mdview{display:flex;flex-direction:column;min-height:100%;box-sizing:border-box}
 .dse-mdviewBar{position:sticky;top:0;z-index:3;display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:6px 8px 0;pointer-events:none}
-.dse-mdviewEdit{pointer-events:auto;display:inline-flex;align-items:center;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:12px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#1f1f1f);font:inherit;font-size:11.5px;padding:0 10px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.dse-mdviewEdit{pointer-events:auto;display:inline-flex;align-items:center;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:12px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#1f1f1f);font-family:var(--dsw-font-family,inherit);font-size:11.5px;padding:0 10px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .dse-mdviewEdit:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
-.dse-mdviewPaper{flex:1;min-height:0}
+.dse-mdviewPaper{flex:1;min-height:0;white-space:normal}
 `
     const CSS_TAG = 'dsh-editor/editor.css'
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {

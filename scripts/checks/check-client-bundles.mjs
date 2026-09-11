@@ -213,6 +213,12 @@ await alertPromise
 
 // --------------------------------------------------------------- dsh-editor
 const editor = loadBundle('packages/dsh-editor/lib/client.js', {})
+// The editor's stylesheet, injected at module scope: the alpha.8 resets of what
+// the preview's plain-text scrollport imposes on the rendered Markdown page.
+const editorCssTag = editor.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-editor/editor.css').pop()
+const editorCss = editorCssTag ? editorCssTag.textContent : ''
+check('md paper resets whitespace', editorCss.includes('.dse-mdviewPaper{flex:1;min-height:0;white-space:normal}'))
+check('edit pill keeps the app font', editorCss.includes('var(--dsw-font-family,inherit)') && editorCss.includes('.dse-mdviewEdit{'))
 check('editor bundle id', editor.id, 'dsh-editor')
 check('editor inject', JSON.stringify(editor.exports.inject), '["locale","slots","sidebarRightTabs"]')
 const registered = {}
@@ -529,6 +535,12 @@ check('paper reads a text-only rule too', paper.includes('--shiki-token-string:#
 check('paper copies other light sheets', paper.includes('--dsl-code-block-background:#f7f7f8'))
 check('paper skips the dark palette', paper.includes('#f5f5f5'), false)
 check('paper skips other plugins', paper.includes('#ff00ff'), false)
+
+// The Markdown chrome override (alpha.3): its own tag, independent of the paper.
+const chromeTag = themes.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-themes/markdown-chrome.css').pop()
+const chrome = chromeTag ? chromeTag.textContent : ''
+check('chrome rule injected', chrome.includes('[data-document-viewer-menu]{display:none}'))
+check('chrome scoped to markdown', chrome.includes('body [data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown"]'))
 
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')

@@ -1,7 +1,7 @@
 {
   "name": "dsh-themes",
-  "version": "0.1.0-alpha.2",
-  "description": "Themes: a small control in the dsh-vn-plugins Web GUI's conversation header that switches the app between the light, dark and system appearance - the same preference Settings > General > Appearance owns - and shows which one is active. Also carries the pack's appearance overrides, starting with the always-light paper the rendered Markdown view is drawn on. Alpha.",
+  "version": "0.1.0-alpha.3",
+  "description": "Themes: a small control in the dsh-vn-plugins Web GUI's conversation header that switches the app between the light, dark and system appearance - the same preference Settings > General > Appearance owns - and shows which one is active. Also carries the pack's appearance overrides: the always-light paper the rendered Markdown view is drawn on, and the chrome rule that hides the preview header's viewer menu on Markdown tabs so the page has exactly one renderer. Alpha.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

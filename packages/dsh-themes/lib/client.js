@@ -27,7 +27,11 @@
  * on a fixed palette regardless of the app theme. The first (alpha.2) is the
  * Markdown paper: the RENDERED Markdown view the shipped document preview draws
  * keeps a white page in the dark theme, by re-declaring ui-theme's own light
- * declarations on its root (see the paper section below).
+ * declarations on its root (see the paper section below). The second (alpha.3) is
+ * the Markdown **chrome** override: a rendered Markdown page has one viewer, so
+ * the preview header's viewer menu - which the shipped implementation fills with
+ * "Markdown" and the plain-text fallback - is hidden on Markdown tabs (the way
+ * to the editable surface is the editor's own **Edit** button on the page).
  *
  * Module-table format of every core client package; no build step.
  */
@@ -50,7 +54,7 @@ window.__ModuleLoader__.load({
     /** The slot id of this occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.2'
+    const PLUGIN_VERSION = '0.1.0-alpha.3'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /** The Session header's utilities slot (the group the Open In control sits in). */
@@ -152,6 +156,15 @@ window.__ModuleLoader__.load({
     const MARKDOWN_ATTRIBUTE = 'data-document-markdown'
     /** The paper rule's style-tag identity (idempotent injection). */
     const PAPER_TAG = 'dsh-themes/markdown-paper.css'
+    /**
+     * The shipped Markdown implementation's registry id. It is the value the
+     * preview writes into `data-document-preview` on a document it is rendering
+     * with the Markdown body, i.e. the handle this package's chrome override
+     * scopes to (and the same constant dsh-editor pins as `MARKDOWN_BODY_KEY`).
+     */
+    const MARKDOWN_RENDERER_ID = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown'
+    /** The chrome override's style-tag identity (idempotent injection). */
+    const CHROME_TAG = 'dsh-themes/markdown-chrome.css'
 
     /**
      * The custom properties one rule declares, by whichever CSSOM path the
@@ -267,6 +280,43 @@ window.__ModuleLoader__.load({
         document.head.appendChild(tag)
       }
       if (tag.textContent !== paper) tag.textContent = paper
+      return true
+    }
+
+    /**
+     * Install the Markdown chrome override (alpha.3). A rendered Markdown page
+     * has exactly one viewer, but the shipped preview header builds its viewer
+     * menu from every candidate implementation - the Markdown body plus the
+     * plain-text fallback - so a Markdown tab offers "Markdown" / "Plain text".
+     * On this pack that choice is noise: the editable surface is reached through
+     * the **Edit** button the editor's own document body draws on the page, not
+     * through a second renderer. The menu is hidden on Markdown tabs and left
+     * alone everywhere else (a code/plain-text tab keeps its own menu).
+     *
+     * Static CSS with no palette dependency, so - unlike the paper - it is
+     * installed once and does not need a refresh on `theme/change`. Scoped by
+     * the renderer id the preview stamps on the document root.
+     * @returns whether the rule is in place.
+     */
+    function installMarkdownChrome() {
+      if (typeof document === 'undefined') return false
+      const chrome =
+        'body [data-document-preview=' +
+        JSON.stringify(MARKDOWN_RENDERER_ID) +
+        '] [data-document-viewer-menu]{display:none}'
+      let tag = null
+      try {
+        tag = document.querySelector('style[data-plugin-css=' + JSON.stringify(CHROME_TAG) + ']')
+      } catch (e) {
+        tag = null
+      }
+      if (!tag) {
+        tag = document.createElement('style')
+        tag.dataset.plugin = 'dsh-themes'
+        tag.dataset.pluginCss = CHROME_TAG
+        document.head.appendChild(tag)
+      }
+      if (tag.textContent !== chrome) tag.textContent = chrome
       return true
     }
 
@@ -475,6 +525,9 @@ window.__ModuleLoader__.load({
           installMarkdownPaper()
         })
       }
+
+      // One-shot: the viewer-menu override is static CSS.
+      installMarkdownChrome()
 
       try {
         ctx.effect(

@@ -1,4 +1,4 @@
-# dsh-editor (alpha.7)
+# dsh-editor (alpha.8)
 
 **Editor** is a **tab type for the pack's right bar** (`dsh-rightbar` — the
 right-hand column of the DeepSeek Harness web GUI, beside the **Start** page and
@@ -9,8 +9,18 @@ names and creates new files through the shared **`dsh-modal`** dialog, and saves
 them back to disk. It is a **sub-plugin**: it holds no bar code, and its
 host-side half owns the pack's own HTTP routes. Alpha.
 
-## What alpha.7 does
+## What it does (through alpha.8)
 
+- **The rendered page behaves like a document, not like plain text** (alpha.8).
+  The shadow body below lives inside the preview's scrollport, which is built for
+  the **plain-text** renderer: `[data-textpreview-body]` declares
+  `white-space:pre` and a monospace font stack, and the shipped Markdown body
+  undid both in the wrapper this package replaces. The pack's own wrapper now
+  does the same — `white-space:normal`, so a source newline is a soft break
+  again and blank lines collapse into paragraph spacing instead of rendering as
+  full empty lines (the "huge spaces" a Markdown document used to show on the
+  white page), and the app's UI font on the **Edit** pill (which otherwise
+  inherited the mono face, unlike every button around it).
 - **Preview is a toggle.** The editor's Markdown preview now carries the way back:
   this package registers the rendered Markdown **document body** itself
   (`sidebar.right.tab.document`, keyed by the shipped preview's own Markdown
@@ -32,7 +42,10 @@ host-side half owns the pack's own HTTP routes. Alpha.
   tab that cannot drift from the file it names. Refused while the document has
   unsaved edits: the preview reads the file from disk, and showing the older text
   silently would be a lie. In the pack's own profile that rendered page is the
-  always-light **Markdown paper** (`dsh-themes`).
+  always-light **Markdown paper** (`dsh-themes`), and since `dsh-themes` alpha.3 it
+  carries **no viewer menu**: the preview header builds that menu from *every*
+  candidate renderer ("Markdown" plus the plain-text fallback), and a Markdown page
+  has exactly one — **Edit** is the way back to the text.
 - **The editor follows the app's appearance** (light **or** dark). CodeMirror
   needs a palette of its own, so the surface configures **oneDark only while the
   app is dark** and a transparent light theme while it is light — the light layer
