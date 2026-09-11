@@ -261,19 +261,30 @@ only host-side routes in the pack.
 | `kind` | `editor` |
 | `patterns` | `["dsh-resource://file/**"]` |
 | `priority` | `extension` - text files open editable instead of in the shipped read-only preview |
-| `canOpen` | session-scoped address, path stays inside the workspace, extension not owned by a shipped preview (md/markdown/html/images/pdf/office/archive/media/binary) |
+| `canOpen` | session-scoped address, path stays inside the workspace, extension not owned by a shipped preview (html/images/pdf/office/archive/media/binary) - **Markdown is claimed** since alpha.6: it is text, and the toolbar hands it to the rendered view on demand |
 | `guide` | one entry, `order: 20` (right after Files' 10): "Editor" -> creates an editor tab |
 | body | `EditorView` for a file address, and the same `EditorView` with `file: null` for the page address `sidebar://editor` (a blank, unnamed document) |
 | title | the label the surface last set (the file name, adopted or on the record) or the captured basename, plus a dirty dot, fed by a module-level per-tab store |
 
 Behaviours that follow from that table:
 
-- Clicking a `.ts`, `.json`, `.py`, … anywhere the Sidebar opens files (the
-  Files tree, a file link in the conversation) claims to this type and shows
+- Clicking a `.ts`, `.json`, `.py`, `.md`, … anywhere the Sidebar opens files
+  (the Files tree, a file link in the conversation) claims to this type and shows
   the editor. Re-opening the same address reveals the same tab.
-- Clicking a `.md`, `.png`, `.pdf`, … is vetoed, so the shipped preview keeps
+- Clicking a `.png`, `.pdf`, `.html`, … is vetoed, so the shipped preview keeps
   it. Paths outside the session workspace (including `absolute/…` addresses,
   which carry no authorizing session) are vetoed too.
+- **Markdown is editable, and `Preview` is the way back** (alpha.6). The toolbar
+  button (shown only while an `md`/`markdown` file is open) asks the right bar's
+  controller for `openResource(address, { kind, replaceTab: tabId })`, where
+  `kind` is **the kind the shipped document preview registered under, read from
+  the tab-type registry** (never hardcoded), so the rendered document takes the
+  editor tab's place and the pair cannot drift from the file. It must be the
+  controller (`ctx.get('sidebarRight')`, resolved lazily), not the tab record's
+  `openResource` action: that action drops `options.kind`, and the registry's
+  ranking would hand the address straight back to this `extension`-band type. The
+  hand-off refuses while the document is dirty - the preview reads the file from
+  disk, and showing the older text silently would be a lie.
 - "+" -> Start -> **Editor** creates the empty **page** tab, whose body is a
   blank CodeMirror document - nothing is read from disk, and there is no file
   browser inside the tab. **Save** (or Ctrl+S) on that document opens the shared
@@ -413,6 +424,50 @@ Design points worth keeping:
   `@deepseek-ai/dsh-client-ui-primitives` (`Menu`, `Tooltip` and the three
   appearance glyphs), so it adds one entry to the boot graph and no new module
   resolution.
+
+**The Markdown paper (alpha.2).** The same package carries the pack's appearance
+*overrides*: rules that hold one surface on a fixed palette whatever the app
+theme is. The first is the rendered Markdown view, which the user wants white in
+either appearance.
+
+The shipped document preview draws Markdown into a container marked
+`data-document-markdown` and paints it from `--dsw-*` tokens. ui-theme declares
+the light palette on `body{}` and **overrides** it on `body[data-ds-dark-theme]{}`
+(the static palette too: 73 `--dsw-static-*`, 79 `--dsw-alias-*`, and shiki.css's
+nine literal `--shiki-token-*`), so a subtree cannot un-dark itself by
+referencing the tokens - it inherits the dark values. The paper is therefore one
+injected rule that **re-declares ui-theme's own light declarations** on that
+container and paints it white:
+
+```css
+body [data-document-markdown]{ /* the theme's light layer, verbatim */ background:#fff; … }
+```
+
+- **Read, not hardcoded.** The light layer is copied at boot out of the theme
+  package's own stylesheets (`document.styleSheets` entries whose
+  `data-plugin`/`data-pluginCss` starts with `@deepseek-ai/dsh-client-ui-theme`,
+  every top-level `:root` / `body` rule that is not the dark one), so a palette
+  change on a harness bump carries over instead of freezing today's hex values.
+  The read enumerates the rule's declared custom properties and falls back to the
+  rule's text where an engine does not expose them - either path yields the same
+  declarations.
+- **All or nothing.** If nothing is readable, nothing is injected: forcing white
+  without the light tokens would paint light text on a white page, which is worse
+  than leaving the view on the app theme.
+- **Scoped to the rendered document.** Chat Markdown and every other surface keep
+  following the app theme; a second selector (`[data-textpreview-body]` matched
+  with `:has([data-document-markdown])`) paints the preview's own scrollport
+  white too, so a short document does not sit on the dark canvas underneath
+  (unsupported `:has()` simply drops that one rule). Because
+  `--dsl-code-block-*` and `--shiki-*` resolve *inside* the document (the block
+  declares them with `var()` on its own element), the copied tokens give the code
+  blocks, inline code, links and lists their light styling for free - no second
+  palette for those.
+- **Kept current.** Installed at boot, on the tick after it (ui-theme's sheets may
+  land late), and again on every `theme/change` (a palette swap re-registers the
+  sheets); the style tag is reused, so repeated installs are idempotent.
+
+The way to this view for a Markdown file is the editor's **Preview** button (§6).
 
 ## 9. The file-manager half of Open In (dsh-open-in-app)
 

@@ -23,6 +23,12 @@
  * its header intact, and this control simply reports that the theme service is
  * unavailable instead of taking another plugin's activation down with it.
  *
+ * It also carries the pack's appearance OVERRIDES - rules that hold one surface
+ * on a fixed palette regardless of the app theme. The first (alpha.2) is the
+ * Markdown paper: the RENDERED Markdown view the shipped document preview draws
+ * keeps a white page in the dark theme, by re-declaring ui-theme's own light
+ * declarations on its root (see the paper section below).
+ *
  * Module-table format of every core client package; no build step.
  */
 /* global window, document */
@@ -44,7 +50,7 @@ window.__ModuleLoader__.load({
     /** The slot id of this occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.1'
+    const PLUGIN_VERSION = '0.1.0-alpha.2'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /** The Session header's utilities slot (the group the Open In control sits in). */
@@ -119,6 +125,150 @@ window.__ModuleLoader__.load({
       active: Object.freeze({ id: 'system', colorScheme: 'light' }),
       revision: -1,
     })
+
+    // ---------------------------------------------------------------------
+    // The Markdown paper: the RENDERED Markdown view stays on the light palette
+    // in either appearance.
+    //
+    // The shipped document preview draws Markdown into a container marked
+    // `data-document-markdown` and paints it from the `--dsw-*` tokens. Those
+    // tokens are declared on `body` (light) and OVERRIDDEN on
+    // `body[data-ds-dark-theme]` (dark), so a subtree cannot un-dark itself by
+    // referencing them - it simply inherits the dark values. This builds one
+    // rule that re-declares ui-theme's own LIGHT declarations on that container,
+    // which turns it into a white page (with a light-palette code block, list
+    // marker and link colour) whatever the app theme is.
+    //
+    // The light layer is READ from the theme plugin's stylesheets - every
+    // top-level `:root` / `body` rule that is not the dark one - instead of
+    // freezing today's hex values here, so a palette change on a harness bump
+    // carries over on its own. If the stylesheets cannot be read, nothing is
+    // injected: forcing white without the light tokens would paint light text on
+    // a white page, which is worse than leaving the view on the app theme.
+    // ---------------------------------------------------------------------
+    /** The theme package whose stylesheets declare the palettes. */
+    const THEME_PLUGIN_ID = '@deepseek-ai/dsh-client-ui-theme'
+    /** The document preview's own marker on the Markdown view root. */
+    const MARKDOWN_ATTRIBUTE = 'data-document-markdown'
+    /** The paper rule's style-tag identity (idempotent injection). */
+    const PAPER_TAG = 'dsh-themes/markdown-paper.css'
+
+    /**
+     * The custom properties one rule declares, by whichever CSSOM path the
+     * engine supports: indexed declarations where custom properties are
+     * enumerated (Blink/Gecko today), else the rule's own text.
+     * @param rule - a CSSStyleRule.
+     * @returns `[name, value]` pairs.
+     */
+    function ruleDeclarations(rule) {
+      const out = []
+      const style = rule.style
+      if (style && typeof style.length === 'number') {
+        for (let i = 0; i < style.length; i++) {
+          const name = style[i]
+          if (typeof name !== 'string' || name.slice(0, 2) !== '--') continue
+          out.push([name, style.getPropertyValue(name)])
+        }
+      }
+      if (out.length === 0 && typeof rule.cssText === 'string') {
+        const open = rule.cssText.indexOf('{')
+        const text = open < 0 ? '' : rule.cssText.slice(open + 1)
+        for (const match of text.matchAll(/(--[a-zA-Z0-9-]+)\s*:\s*([^;}]+)/g)) out.push([match[1], match[2]])
+      }
+      return out
+    }
+
+    /**
+     * Collect the light custom properties ui-theme declares: the static palette
+     * and the alias layer live in `body`/`:root` rules, and the dark palette in
+     * `body[data-ds-dark-theme]` rules that are skipped here.
+     * @returns the `name:value` declarations, or `null` when nothing was readable.
+     */
+    function readLightDeclarations() {
+      let sheets = null
+      try {
+        sheets = document.styleSheets
+      } catch (e) {
+        return null
+      }
+      if (!sheets) return null
+      const declarations = []
+      const seen = new Set()
+      for (const sheet of Array.from(sheets)) {
+        let owner = ''
+        try {
+          const node = sheet.ownerNode
+          owner = node && node.dataset ? String(node.dataset.plugin || node.dataset.pluginCss || '') : ''
+        } catch (e) {
+          owner = ''
+        }
+        // Only the theme package's own sheets carry the palettes.
+        if (owner.indexOf(THEME_PLUGIN_ID) !== 0) continue
+        let rules = null
+        try {
+          rules = sheet.cssRules
+        } catch (e) {
+          continue
+        }
+        for (const rule of Array.from(rules || [])) {
+          const selector = rule && rule.selectorText
+          if (typeof selector !== 'string') continue
+          const flat = selector.replace(/\s+/g, '')
+          if (flat !== ':root' && flat !== 'body' && flat !== 'html,body') continue
+          for (const [name, raw] of ruleDeclarations(rule)) {
+            const value = typeof raw === 'string' ? raw.trim() : ''
+            if (name.slice(0, 2) !== '--' || value === '' || seen.has(name)) continue
+            seen.add(name)
+            declarations.push(name + ':' + value)
+          }
+        }
+      }
+      return declarations.length === 0 ? null : declarations
+    }
+
+    /**
+     * Install (or refresh) the paper rule. Idempotent: the same tag is reused and
+     * only rewritten when the declarations changed.
+     * @returns whether the rule is in place.
+     */
+    function installMarkdownPaper() {
+      if (typeof document === 'undefined') return false
+      let declarations = null
+      try {
+        declarations = readLightDeclarations()
+      } catch (e) {
+        declarations = null
+      }
+      if (declarations === null) return false
+      const paper =
+        'body [' +
+        MARKDOWN_ATTRIBUTE +
+        ']{' +
+        declarations.join(';') +
+        ';background:#fff;color:var(--dsw-alias-label-primary,#1f1f1f);box-sizing:border-box;min-height:100%;padding:12px 14px}' +
+        // The scrollport behind the document joins the page too, so a short
+        // document does not sit on the app's dark canvas underneath. Only the
+        // Markdown implementation is matched; plain-text and code previews keep
+        // the app theme. Where `:has()` is unsupported the whole rule is
+        // dropped, and the document itself is still white.
+        'body [data-textpreview-body]:has([' +
+        MARKDOWN_ATTRIBUTE +
+        ']){background:#fff}'
+      let tag = null
+      try {
+        tag = document.querySelector('style[data-plugin-css=' + JSON.stringify(PAPER_TAG) + ']')
+      } catch (e) {
+        tag = null
+      }
+      if (!tag) {
+        tag = document.createElement('style')
+        tag.dataset.plugin = 'dsh-themes'
+        tag.dataset.pluginCss = PAPER_TAG
+        document.head.appendChild(tag)
+      }
+      if (tag.textContent !== paper) tag.textContent = paper
+      return true
+    }
 
     // ---------------------------------------------------------------------
     // The theme snapshot as a `useSyncExternalStore` source: the service's own
@@ -310,6 +460,21 @@ window.__ModuleLoader__.load({
       Promise.resolve().then(() => {
         state.refresh()
       })
+
+      // The Markdown paper copies ui-theme's own light declarations, and those
+      // stylesheets may land a tick after this row (both are boot plugins): try
+      // at once, again on the next tick, and once more whenever the theme
+      // changes (a palette swap re-registers the sheets, so the copy is rebuilt
+      // from whatever the theme declares then).
+      installMarkdownPaper()
+      Promise.resolve().then(() => {
+        installMarkdownPaper()
+      })
+      if (typeof ctx.on === 'function') {
+        ctx.on('theme/change', () => {
+          installMarkdownPaper()
+        })
+      }
 
       try {
         ctx.effect(

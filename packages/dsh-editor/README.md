@@ -1,16 +1,29 @@
-# dsh-editor (alpha.5)
+# dsh-editor (alpha.6)
 
 **Editor** is a **tab type for the pack's right bar** (`dsh-rightbar` — the
 right-hand column of the DeepSeek Harness web GUI, beside the **Start** page and
 the **Files** tab that `dsh-rightbar-files` provides). It opens **text files
-only** (strict UTF-8, binary is refused), edits them with a vendored
-**CodeMirror 6**, starts **blank documents** from the tab strip's "+", names and
-creates new files through the shared **`dsh-modal`** dialog, and saves them back
-to disk. It is a **sub-plugin**: it holds no bar code, and its host-side half
-owns the pack's own HTTP routes. Alpha.
+only** (strict UTF-8, binary is refused) — **Markdown included** — edits them with
+a vendored **CodeMirror 6**, starts **blank documents** from the tab strip's "+",
+names and creates new files through the shared **`dsh-modal`** dialog, and saves
+them back to disk. It is a **sub-plugin**: it holds no bar code, and its
+host-side half owns the pack's own HTTP routes. Alpha.
 
-## What alpha.5 does
+## What alpha.6 does
 
+- **Markdown opens editable.** `.md` / `.markdown` are text, so the editor claims
+  them (they used to be vetoed to the shipped preview). Clicking one in the Files
+  tree opens it as a highlighted document — edit it, save it, and the file on disk
+  is what changes.
+- **`Preview` hands the file to the rendered view.** The toolbar gains a
+  **Preview** button while a Markdown file is open. It names the shipped
+  document-preview type (`@deepseek-ai/dsh-client-ui-sidebar-documentpreview`,
+  whose *kind* is read from the tab registry, never hardcoded) and asks the right
+  bar's controller to open the same address there, **replacing the editor tab** —
+  so Edit ⇄ Preview is one tab that cannot drift from the file it names. Refused
+  while the document has unsaved edits: the preview reads the file from disk, and
+  showing the older text silently would be a lie. In the pack's own profile that
+  rendered view is the always-light **Markdown paper** (`dsh-themes`).
 - **The editor follows the app's appearance** (light **or** dark). CodeMirror
   needs a palette of its own, so the surface configures **oneDark only while the
   app is dark** and a transparent light theme while it is light — the light layer
@@ -34,12 +47,14 @@ owns the pack's own HTTP routes. Alpha.
 - **Text files open editable.** The type declares `dsh-resource://file/**` in
   the `extension` priority band, which outranks every viewer the product ships,
   and vetoes in `canOpen`:
-  - files the shipped previews own (`.md`/`.markdown`/`.html`/images/PDF/office/
-    archive/media/binary extensions) — those keep their own preview tab;
+  - what a text editor has nothing to add to (`.html`, images, PDF,
+    office/archive/media and binary extensions) — those keep their own preview
+    tab;
   - paths outside the session workspace (including the authorizing-less
     `absolute/…` addresses).
-  So clicking a `.ts`, `.json`, `.py`, `.txt` … in the Files tree opens it in the
-  editor; clicking a `.md` or a `.png` opens the shipped preview as before.
+  So clicking a `.ts`, `.json`, `.py`, `.txt`, `.md` … in the Files tree opens it
+  in the editor; clicking a `.png` or a `.pdf` opens the shipped preview as
+  before.
 - **"+" → Editor opens a BLANK document.** Picking the guide entry creates an
   editor tab on an empty, unnamed document: nothing is read from disk and the
   tab holds no workspace browser. The file bar reads *Untitled* and **Save** is
@@ -52,15 +67,15 @@ owns the pack's own HTTP routes. Alpha.
   extension is required, dotfiles excepted; no absolute or `..` paths), shows
   the server's answer **inside the dialog** when the name is taken
   (`409 EXISTS`) and keeps what was typed. On success:
-  - an ordinary text/code file (`.txt`, `.ts`, `.json`, `.py`, …) becomes its own
-    tab (`replaceTab`), so the chip shows the file name and every later save is
-    an ordinary in-place save — exactly as if the file had been clicked in the
-    Files tree;
-  - an extension a shipped preview owns (`.md`, `.html`, an image, a PDF, …)
-    **stays in the editor**: the chip takes the file's name through the tab
-    title store, and later saves go in place. The tab is deliberately not handed
-    to the preview, because the preview cannot edit the file and this tab is the
-    only place that can.
+  - an ordinary text/code file (`.txt`, `.ts`, `.json`, `.py`, `.md`, …) becomes
+    its own tab (`replaceTab`), so the chip shows the file name and every later
+    save is an ordinary in-place save — exactly as if the file had been clicked in
+    the Files tree;
+  - an extension a shipped preview owns (`.html`, an image, a PDF, …) **stays in
+    the editor**: the chip takes the file's name through the tab title store, and
+    later saves go in place. The tab is deliberately not handed to the preview,
+    because the preview cannot edit the file and this tab is the only place that
+    can.
   Without `dsh-modal` mounted the dialog falls back to the browser's own prompt.
 - **Edit**: CodeMirror 6 with line numbers, history/undo, bracket matching,
   autocomplete, find-in-file, and syntax highlighting for js/ts/jsx/tsx, json,
@@ -69,8 +84,9 @@ owns the pack's own HTTP routes. Alpha.
   dark, a token-driven transparent theme while it is light; see alpha.5 above).
   The engine is **lazy**: the vendored classic bundle is
   fetched once from `/api/dsh-editor/vendor` the first time a file opens.
-- **Toolbar**: a find-in-file search input and a **Save** button. Save is offered
-  for an unnamed document at all times and for an open file while it is modified;
+- **Toolbar**: a find-in-file search input, a **Preview** button (Markdown files
+  only, see alpha.6) and a **Save** button. Save is offered for an unnamed
+  document at all times and for an open file while it is modified;
   **Ctrl/Cmd+S** works inside the editor. The chip of a tab with unsaved work
   carries a dot.
 - **Saving** is optimistic and atomic: the panel PUTs the whole document with the
@@ -110,8 +126,9 @@ uses on every boot.
 cordis.patch.yml      bundle layer: inserts the 'editor' row (nothing else patched)
 lib/index.js          Node half: the /api/dsh-editor routes above (read, save, create, vendor)
 lib/client.js         Browser half: tab type + guide entry, body (blank document or an
-                      open file), the save-as dialog over the `modals` service, and
-                      the title with the dirty dot (module-table bundle)
+                      open file), the save-as dialog over the `modals` service, the
+                      Preview hand-off to the rendered Markdown view, and the title
+                      with the dirty dot (module-table bundle)
 lib/vendor/cm6.min.js GENERATED - the vendored CodeMirror 6 classic bundle
                       (IIFE on window.DSHEditorCM); commit it, do not edit by hand
 vendor/package.json   +  vendor/entry.js  — reproducible CM6 build inputs
@@ -130,6 +147,16 @@ The theme service is resolved the same way (`ctx.get('theme')`, from the shipped
 marker ui-layout writes and then to `prefers-color-scheme` — so the editor keeps
 following the app on every profile. The header control that switches that
 preference is [`packages/dsh-themes`](../dsh-themes).
+
+**Preview** resolves two more services lazily, and neither is a hard dependency:
+the right bar's controller (`ctx.get('sidebarRight')`) does the actual open, and
+the tab registry (`ctx.get('sidebarRightTabs')`) is consulted for the **kind** the
+shipped document preview registered under — so a harness line that renames that
+kind keeps working, and a deployment without the preview type gets a clear
+"Preview unavailable" instead of a dead button. `openResource(address, { kind })`
+is the controller's own option; the tab record's `openResource` action drops
+`kind`, so the editor calls the controller directly (the tab is on screen, so its
+session is the mounted one).
 
 ### Regenerating the vendored CodeMirror bundle
 

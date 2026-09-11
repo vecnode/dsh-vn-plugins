@@ -17,10 +17,10 @@
       "vendors": ["@deepseek-ai/dsh-client-ui-sidebar-files"]
     },
     "dsh-editor": {
-      "version": "0.1.0-alpha.5",
+      "version": "0.1.0-alpha.6",
       "rows": ["editor"],
       "rowOverrides": [],
-      "uses": ["dsh-modal", "@deepseek-ai/dsh-client-ui-theme"]
+      "uses": ["dsh-modal", "@deepseek-ai/dsh-client-ui-theme", "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"]
     },
     "dsh-modal": {
       "version": "0.1.0-alpha.1",
@@ -29,7 +29,7 @@
       "rowOverrides": []
     },
     "dsh-themes": {
-      "version": "0.1.0-alpha.1",
+      "version": "0.1.0-alpha.2",
       "rows": ["themes"],
       "rowOverrides": [],
       "uses": ["@deepseek-ai/dsh-client-ui-theme"]

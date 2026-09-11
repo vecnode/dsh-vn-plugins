@@ -22,8 +22,11 @@ DSH_CHECK_LAUNCH=1 node scripts/checks/check-node-routes.mjs   # also opens a re
   React runtime** found in the profile or an npx cache (`react-dom/server`, so
   browser-only hooks such as `useEffect` are skipped, like any server render).
   It asserts the `modals` service, the editor's tab type/`canOpen`/guide
-  contract, the themes control's header seat (`order` left of Open In) and its
-  snapshot store, and the open-in-app route split (file managers to the pack
+  contract (Markdown claimed, **Preview** naming the registry's kind, and the
+  fallback kind when the preview type is absent), the themes control's header
+  seat (`order` left of Open In), its snapshot store, and the **Markdown paper**
+  (the light declarations it copies out of fake theme stylesheets, and the dark
+  ones it must skip), and the open-in-app route split (file managers to the pack
   route, everything else to the shipped one).
 - `check-node-routes.mjs` imports the two Node halves, captures the handlers
   they register on the `connection` service, and drives them with real

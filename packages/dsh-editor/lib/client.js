@@ -12,12 +12,18 @@
  *     the tab types the product ships;
  *   - it declares `dsh-resource://file/**` in the `extension` band - the band
  *     reserved for types from outside the product, which outranks every viewer
- *     shipped with it - and vetoes in `canOpen` anything the shipped previews
- *     own (Markdown, HTML, images, PDF, office/archive/media files) and any
- *     path outside the session workspace. Opening a plain text/code file in the
- *     Sidebar (a click in the Files tree, a file link in the conversation)
- *     therefore lands HERE, as an editable tab; everything else keeps its own
- *     preview tab;
+ *     shipped with it - and vetoes in `canOpen` what a text editor has nothing
+ *     to add to (HTML, images, PDF, office/archive/media files and the binary
+ *     formats) plus every path outside the session workspace. Opening a text or
+ *     code file in the Sidebar (a click in the Files tree, a file link in the
+ *     conversation) therefore lands HERE, as an editable tab; everything else
+ *     keeps its own preview tab;
+ *   - Markdown is one of those text files (alpha.6): it opens editable, and the
+ *     toolbar's **Preview** button hands the same address to the shipped
+ *     document preview - named by kind, because the registry's ranking would
+ *     otherwise hand it straight back to this `extension`-band type - so the
+ *     rendered document is always one click away and its tab takes the editor
+ *     tab's place;
  *   - it contributes a guide entry, so the tab strip's "+" control - which
  *     opens the "Start" page - offers "Editor". Picking it creates an editor
  *     tab that opens on a BLANK document: nothing is read from disk until the
@@ -94,13 +100,29 @@ window.__ModuleLoader__.load({
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the toolbar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.5'
+    const PLUGIN_VERSION = '0.1.0-alpha.6'
     /** The client service dsh-modal provides; resolved lazily, never required. */
     const MODAL_SERVICE = 'modals'
     /** The client service @deepseek-ai/dsh-client-ui-theme provides; resolved lazily too. */
     const THEME_SERVICE = 'theme'
     /** The theme presenter's dark-palette marker on <body> (ui-layout). */
     const DARK_ATTRIBUTE = 'data-ds-dark-theme'
+    /** The right bar's navigation controller (dsh-rightbar), resolved lazily. */
+    const SIDEBAR_SERVICE = 'sidebarRight'
+    /** The tab-type registry (dsh-rightbar), whose entries name every registered kind. */
+    const TAB_TYPES_SERVICE = 'sidebarRightTabs'
+    /** The shipped document preview's registry id; its KIND is read from the registry. */
+    const PREVIEW_TYPE_ID = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview'
+    /** The preview's kind on the pinned line, used only when the registry has no such type. */
+    const PREVIEW_FALLBACK_KIND = 'text'
+    /**
+     * Documents this editor claims as TEXT and can also hand to the RENDERED
+     * preview from its toolbar ("Preview"): the Markdown family the shipped
+     * preview draws as a document. Everything else that preview owns (HTML,
+     * images, PDF, archives, media, binaries) keeps its own tab, because a text
+     * editor has nothing to add there.
+     */
+    const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown'])
 
     // ---------------------------------------------------------------------
     // Styles
@@ -122,6 +144,9 @@ window.__ModuleLoader__.load({
 .dse-save{flex:none;display:inline-flex;align-items:center;gap:6px;height:26px;box-sizing:border-box;border:0;border-radius:6px;background:var(--dsw-alias-state-accent,#4f8cff);color:#fff;font:inherit;font-size:12.5px;font-weight:500;padding:0 12px;cursor:pointer;white-space:nowrap}
 .dse-save:hover:not(:disabled){filter:brightness(1.08)}
 .dse-save:disabled{opacity:.45;cursor:default}
+.dse-preview{flex:none;display:inline-flex;align-items:center;height:26px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#1f1f1f);font:inherit;font-size:12.5px;padding:0 10px;cursor:pointer;white-space:nowrap}
+.dse-preview:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
+.dse-preview[hidden]{display:none}
 .dse-fileBar{flex:none;display:flex;align-items:center;gap:8px;padding:4px 10px 5px 12px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.14));font-size:11.5px;color:var(--dsw-alias-label-tertiary,#999);min-width:0}
 .dse-filePath{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;color:var(--dsw-alias-label-secondary,#666)}
 .dse-dirtyDot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-warning-primary,#d29922);opacity:0}
@@ -222,14 +247,16 @@ window.__ModuleLoader__.load({
       return dot <= 0 ? '' : name.slice(dot + 1).toLowerCase()
     }
 
-    // Extensions the product's own preview types own (Markdown/HTML renderers,
-    // the image and PDF viewers) plus the binary formats a text editor cannot
-    // show at all. A file with one of these keeps its shipped preview tab: our
-    // type registers in the `extension` band, which outranks every builtin, so
-    // this veto is what preserves them.
+    // Extensions the product's own preview types own (HTML renderers, the image
+    // and PDF viewers) plus the binary formats a text editor cannot show at all.
+    // A file with one of these keeps its shipped preview tab: our type registers
+    // in the `extension` band, which outranks every builtin, so this veto is
+    // what preserves them. Markdown is deliberately NOT here since alpha.6: it
+    // is text, the editor can edit it, and the toolbar's "Preview" button hands
+    // it back to the rendered view on demand.
     const PREVIEW_EXTENSIONS = new Set([
       // rendered documents
-      'md', 'markdown', 'mdown', 'mkd', 'mdx', 'html', 'htm', 'xhtml',
+      'html', 'htm', 'xhtml',
       // images
       'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'svg', 'tif', 'tiff',
       // documents / archives / media / binaries
@@ -568,7 +595,7 @@ window.__ModuleLoader__.load({
       const toolRoot = document.createElement('div')
       toolRoot.className = 'dse-root'
 
-      // ---- toolbar: find-in-file + SAVE (the tab strip owns close/reload) ----
+      // ---- toolbar: find-in-file + PREVIEW (Markdown only) + SAVE ----
       const tools = document.createElement('div')
       tools.className = 'dse-tools'
       const searchWrap = document.createElement('div')
@@ -597,7 +624,17 @@ window.__ModuleLoader__.load({
       saveBtn.disabled = true
       saveBtn.textContent = 'Save'
       saveBtn.title = 'Save this file to disk (Ctrl+S)'
+      // Markdown is editable here (alpha.6); this is the way back to the
+      // RENDERED document the shipped preview draws. Hidden for anything else,
+      // because the preview has nothing to add to a plain text file.
+      const previewBtn = document.createElement('button')
+      previewBtn.type = 'button'
+      previewBtn.className = 'dse-preview'
+      previewBtn.hidden = true
+      previewBtn.textContent = 'Preview'
+      previewBtn.title = 'Open the rendered view of this Markdown file'
       actions.appendChild(saveStatus)
+      actions.appendChild(previewBtn)
       actions.appendChild(saveBtn)
       tools.appendChild(searchWrap)
       tools.appendChild(actions)
@@ -727,6 +764,36 @@ window.__ModuleLoader__.load({
         findInput.disabled = !cm
         saveBtn.textContent = has ? 'Save' : 'Save\u2026'
         saveBtn.title = !has ? 'Name this file and write it into the conversation folder (Ctrl+S)' : isDirty ? 'Save this file to disk (Ctrl+S)' : 'Nothing to save'
+        // "Preview" belongs to the Markdown family (the documents this editor
+        // claims as text and the shipped preview can render as a document).
+        previewBtn.hidden = !has || !MARKDOWN_EXTENSIONS.has(extensionOf(file.path))
+      }
+
+      /**
+       * Hand this document to the RENDERED preview: the shipped document preview
+       * type claims the address, and the preview tab takes this one's place, so
+       * the pair Edit <-> Preview is one tab that cannot drift from the file it
+       * names. Unsaved edits are NOT included (the preview reads the file), so
+       * the button warns instead of silently showing the older text.
+       */
+      function requestPreview() {
+        if (!file) return
+        if (dirty) {
+          setStatus('Save first', 'warn')
+          showBanner('Save your edits first: the rendered preview reads the file from disk.', [])
+          return
+        }
+        if (typeof bodyHooks.openPreview !== 'function') {
+          setStatus('Preview unavailable', 'err')
+          showBanner('The rendered preview is unavailable in this window.', [])
+          return
+        }
+        try {
+          bodyHooks.openPreview(sessionFileAddress(file.sessionId, file.path), tabId)
+        } catch (err) {
+          setStatus('Preview unavailable', 'err')
+          showBanner(err && err.message ? err.message : 'The rendered preview is unavailable.', [])
+        }
       }
 
       function onDocChanged() {
@@ -1126,6 +1193,7 @@ window.__ModuleLoader__.load({
         findInput.focus()
       })
       saveBtn.addEventListener('click', () => saveNow(false))
+      previewBtn.addEventListener('click', () => requestPreview())
 
       filePath.textContent = ''
       showState('loading', 'Opening\u2026', '')
@@ -1301,9 +1369,10 @@ window.__ModuleLoader__.load({
      * behind the tab's own blank document when `file` is null.
      *
      * The imperative surface is created once per tab id and lives until the tab
-     * closes, so it is handed a STABLE `saveAs` hook that reads the current tab
-     * record on every call: saving the blank document names it, and the tab
-     * record is then swapped for the created file's own tab.
+     * closes, so it is handed STABLE hooks that read the current tab record on
+     * every call: saving the blank document names it and the tab record is then
+     * swapped for the created file's own tab, and "Preview" hands the file at
+     * the CURRENT record path to the rendered preview.
      */
     function EditorView(props) {
       const hostRef = useRef(null)
@@ -1312,6 +1381,8 @@ window.__ModuleLoader__.load({
       const sessionId = props.sessionId
       const file = props.file
       const getModals = props.getModals
+      const openPreviewRef = useRef(null)
+      openPreviewRef.current = props.openPreview
       const fileKey = file ? file.sessionId + '\u0000' + file.path : ''
 
       const saveAsRef = useRef(null)
@@ -1326,6 +1397,11 @@ window.__ModuleLoader__.load({
       if (hooksRef.current === null) {
         hooksRef.current = {
           saveAs: (text) => saveAsRef.current(text),
+          openPreview: (address, tabId) => {
+            const open = openPreviewRef.current
+            if (typeof open !== 'function') throw new Error('The rendered preview is unavailable in this window.')
+            return open(address, tabId)
+          },
         }
       }
 
@@ -1366,6 +1442,7 @@ window.__ModuleLoader__.load({
         file: file,
         sessionId: props.sessionId,
         getModals: props.getModals,
+        openPreview: props.openPreview,
         revision: tab.navigation.revision,
       })
     }
@@ -1432,6 +1509,47 @@ window.__ModuleLoader__.load({
         }
       }
 
+      /**
+       * The kind the shipped document preview registered under, read from the
+       * tab-type registry instead of hardcoded: the preview names it itself, and
+       * a harness line that renames it would otherwise turn "Preview" into a
+       * dead button. Falls back to the pinned line's kind.
+       */
+      function previewKindNow() {
+        try {
+          const registry = ctx.get ? ctx.get(TAB_TYPES_SERVICE) : undefined
+          const entries = registry && typeof registry.entries === 'function' ? registry.entries() : null
+          for (const definition of Array.isArray(entries) ? entries : []) {
+            if (definition && definition.id === PREVIEW_TYPE_ID && typeof definition.kind === 'string') {
+              return definition.kind
+            }
+          }
+        } catch (e) {}
+        return PREVIEW_FALLBACK_KIND
+      }
+
+      /**
+       * Open one file address in the RENDERED preview, replacing the editor tab
+       * that asked for it. The right bar's controller is resolved lazily (the
+       * editor is usable without the bar), and the preview type is NAMED, because
+       * the registry's ranking would otherwise hand the address straight back to
+       * this editor (the `extension` band outranks the preview's `fallback`).
+       * @param address - the file address to render.
+       * @param tabId - the editor tab to replace.
+       */
+      function openPreviewNow(address, tabId) {
+        let controller = null
+        try {
+          controller = ctx.get ? ctx.get(SIDEBAR_SERVICE) : null
+        } catch (e) {
+          controller = null
+        }
+        if (!controller || typeof controller.openResource !== 'function') {
+          throw new Error('The rendered preview is unavailable (the right bar is not mounted).')
+        }
+        controller.openResource(address, { kind: previewKindNow(), replaceTab: tabId })
+      }
+
       // Follow the app's color scheme. The theme service's own change event is
       // authoritative once ui-theme is mounted; the body marker (written by
       // ui-layout before the first paint) is both the boot-time answer and the
@@ -1476,7 +1594,7 @@ window.__ModuleLoader__.load({
                 {
                   name: 'sidebar.right.pane.tab',
                   key: EDITOR_ID,
-                  inject: () => ({ getModals: modalsNow }),
+                  inject: () => ({ getModals: modalsNow, openPreview: openPreviewNow }),
                 },
                 EditorBody,
               ),

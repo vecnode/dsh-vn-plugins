@@ -46,11 +46,16 @@ The pack targets the harness line DeepSeek ships to the raw web install
   `@deepseek-ai/dsh-client-ui-theme` service (`getTheme` / `setTheme` / the
   `theme/change` event, resolved lazily) - so the button and
   Settings → General → Appearance are the same preference. The editor reads the
-  same service for its own light/dark CodeMirror palette.
+  same service for its own light/dark CodeMirror palette. It also injects the
+  pack's appearance overrides: the **Markdown paper**, one rule that re-declares
+  ui-theme's own light declarations on the shipped preview's
+  `[data-document-markdown]` root, so the rendered Markdown view stays white in
+  the dark theme.
 - The shipped `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` row stays
   enabled: it only consumes `sidebarRightTabs` and the keyed seat, so the
-  Markdown/code/image/PDF previews keep working inside the pack's bar. The
-  pack's **first-generation Files panel is retired**: `dsh-files` (row `files`)
+  code/image/PDF/HTML previews keep working inside the pack's bar, and the editor
+  names its kind (`text`, read from the registry) for **Preview**. The pack's
+  **first-generation Files panel is retired**: `dsh-files` (row `files`)
   and its pre-alpha.10 name `dsh-focus` are pruned from the profile.
 
 ## Upgrading the pack when DSH moves
@@ -91,6 +96,12 @@ The pack targets the harness line DeepSeek ships to the raw web install
   re-themes live, and the new **dsh-themes** bundle adds the header button that
   switches Light / Dark / System. New package, so the first install after this
   change needs a plain `install.bat` / `./install.sh` run or `-Force`.
+- **editor alpha.6 / themes alpha.2**: **Markdown opens editable** in the editor
+  (it is text) with a toolbar **Preview** button that hands the file to the
+  rendered view by naming the shipped preview's registry kind; and
+  **dsh-themes** carries the **Markdown paper**, which keeps that rendered view
+  white in the dark theme by re-declaring ui-theme's own light declarations on
+  it. No new packages, no core rows touched.
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the

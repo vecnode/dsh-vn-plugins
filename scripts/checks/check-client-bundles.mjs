@@ -85,8 +85,17 @@ function fakeDocument() {
     parentNode: null,
   })
   return {
-    head: { appendChild() {} },
+    // Style tags land here, so a check can inspect what a bundle injected.
+    head: {
+      children: [],
+      appendChild(child) {
+        this.children.push(child)
+        return child
+      },
+    },
     body: element(),
+    // The theme package's own stylesheets; a check fills this in (CSSOM shape).
+    styleSheets: [],
     querySelector: () => null,
     createElement: () => element(),
     addEventListener() {},
@@ -205,8 +214,20 @@ check('editor bundle id', editor.id, 'dsh-editor')
 check('editor inject', JSON.stringify(editor.exports.inject), '["slots","sidebarRightTabs"]')
 const registered = {}
 const types = []
+const previewCalls = []
+const tabTypes = {
+  register(definition) {
+    types.push(definition)
+    return () => {}
+  },
+  entries: () => [
+    { id: '@deepseek-ai/dsh-client-ui-sidebar-documentpreview', kind: 'renamed-preview' },
+    { id: 'dsh-editor', kind: 'editor' },
+  ],
+}
 editor.exports.apply({
-  get: (name) => (name === 'modals' ? modals : undefined),
+  get: (name) =>
+    name === 'modals' ? modals : name === 'sidebarRight' ? { openResource: (address, options) => previewCalls.push({ address, options }) } : name === 'sidebarRightTabs' ? tabTypes : undefined,
   slots: {
     inject: (name, fn) => fn(),
     register(spec, component) {
@@ -214,12 +235,7 @@ editor.exports.apply({
       return () => {}
     },
   },
-  sidebarRightTabs: {
-    register(definition) {
-      types.push(definition)
-      return () => {}
-    },
-  },
+  sidebarRightTabs: tabTypes,
   effect: (fn) => fn(),
   logger: { debug() {}, warn() {} },
 })
@@ -227,12 +243,17 @@ check('tab type registered', types.length === 1 && types[0].id + '/' + types[0].
 check('page title', types[0].title('sidebar://editor'), 'Editor')
 check('file title', types[0].title('dsh-resource://file/session/s1/src/app.ts'), 'app.ts')
 check('claims a text file', types[0].canOpen('dsh-resource://file/session/s1/src/app.ts'), true)
-check('vetoes markdown', types[0].canOpen('dsh-resource://file/session/s1/readme.md'), false)
+check('claims markdown', types[0].canOpen('dsh-resource://file/session/s1/readme.md'), true)
+check('vetoes html', types[0].canOpen('dsh-resource://file/session/s1/page.html'), false)
 check('vetoes absolute', types[0].canOpen('dsh-resource://file/session/s1/C:/x.ts'), false)
 check('guide entry', types[0].guide.map((entry) => entry.title()).join(','), 'Editor')
 check('body + title seats', Object.keys(registered).sort().join(','), 'sidebar.right.pane.tab#dsh-editor,sidebar.right.pane.tab.title#dsh-editor')
 const facade = registered['sidebar.right.pane.tab#dsh-editor'].spec.inject()
 check('body resolves modals lazily', facade.getModals(), modals)
+facade.openPreview('dsh-resource://file/session/s1/readme.md', 'tab2')
+check('preview names the registry kind', previewCalls[0].options.kind, 'renamed-preview')
+check('preview replaces the editor tab', previewCalls[0].options.replaceTab, 'tab2')
+check('preview keeps the address', previewCalls[0].address, 'dsh-resource://file/session/s1/readme.md')
 const Body = registered['sidebar.right.pane.tab#dsh-editor'].component
 const blankTab = { id: 'tab1', contentId: 'sidebar://editor', title: 'Editor', navigation: { revision: 0 } }
 const fileTab = { id: 'tab2', contentId: 'dsh-resource://file/session/s1/src/app.ts', title: 'app.ts', navigation: { revision: 3 } }
@@ -248,6 +269,27 @@ check(
     'data-editor-tab="tab2"',
   ),
 )
+
+// A registry without the preview type (a deployment that never mounted it):
+// "Preview" still names a kind instead of throwing a bare TypeError.
+const editorBare = loadBundle('packages/dsh-editor/lib/client.js', {})
+const bareCalls = []
+const editorBareSeats = {}
+editorBare.exports.apply({
+  get: (name) => (name === 'sidebarRight' ? { openResource: (address, options) => bareCalls.push(options) } : undefined),
+  slots: {
+    inject: (name, fn) => fn(),
+    register(spec) {
+      editorBareSeats[spec.name + (spec.key ? '#' + spec.key : '')] = { spec }
+      return () => {}
+    },
+  },
+  sidebarRightTabs: { register: () => () => {}, entries: () => [] },
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+editorBareSeats['sidebar.right.pane.tab#dsh-editor'].spec.inject().openPreview('dsh-resource://file/session/s1/readme.md', 'tab9')
+check('preview falls back to the pinned kind', bareCalls[0].kind, 'text')
 
 // ---------------------------------------------------------- dsh-open-in-app
 const openInApp = loadBundle('packages/dsh-open-in-app/lib/client.js', {})
@@ -381,6 +423,62 @@ try {
   refused = true
 }
 check('themes refuses to write without the service', refused)
+
+// The Markdown paper: it copies ui-theme's own LIGHT declarations onto the
+// rendered Markdown root. Fake stylesheets in the shape the CSSOM exposes.
+function fakeStyle(pairs) {
+  const values = {}
+  const style = {
+    length: pairs.length,
+    getPropertyValue: (name) => (Object.prototype.hasOwnProperty.call(values, name) ? values[name] : ''),
+  }
+  pairs.forEach(([name, value], index) => {
+    values[name] = value
+    style[index] = name
+  })
+  return style
+}
+themes.document.styleSheets = [
+  {
+    ownerNode: { dataset: { pluginCss: '@deepseek-ai/dsh-client-ui-theme/design-platform.css' } },
+    cssRules: [
+      {
+        selectorText: 'body',
+        style: fakeStyle([
+          ['--dsw-static-neutral-bluish-900', '#151517'],
+          ['--dsw-alias-label-primary', 'var(--dsw-static-neutral-bluish-900)'],
+          ['--dsl-code-block-background', '#f7f7f8'],
+        ]),
+      },
+      { selectorText: 'body[data-ds-dark-theme]', style: fakeStyle([['--dsw-alias-label-primary', '#f5f5f5']]) },
+      // An engine that does not enumerate custom properties: text only.
+      { selectorText: ':root', cssText: ':root{--shiki-token-keyword:#d6336c;--shiki-token-string:#2f9e44}' },
+    ],
+  },
+  {
+    ownerNode: { dataset: { plugin: 'another-plugin' } },
+    cssRules: [{ selectorText: 'body', style: fakeStyle([['--dsw-alias-label-primary', '#ff00ff']]) }],
+  },
+]
+themes.exports.apply({
+  get: () => undefined,
+  on: () => () => {},
+  slots: { inject: (name, fn) => fn(), register: () => () => {} },
+  locale: { register: () => () => {} },
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+const paperTag = themes.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-themes/markdown-paper.css').pop()
+const paper = paperTag ? paperTag.textContent : ''
+check('paper rule injected', paper.includes('background:#fff') && paper.includes('data-document-markdown'))
+check('paper also paints the scrollport', paper.includes('[data-textpreview-body]:has([data-document-markdown])'))
+check('paper copies the light aliases', paper.includes('--dsw-alias-label-primary:var(--dsw-static-neutral-bluish-900)'))
+check('paper copies the light statics', paper.includes('--dsw-static-neutral-bluish-900:#151517'))
+check('paper copies the light shiki tokens', paper.includes('--shiki-token-keyword:#d6336c'))
+check('paper reads a text-only rule too', paper.includes('--shiki-token-string:#2f9e44'))
+check('paper copies other light sheets', paper.includes('--dsl-code-block-background:#f7f7f8'))
+check('paper skips the dark palette', paper.includes('#f5f5f5'), false)
+check('paper skips other plugins', paper.includes('#ff00ff'), false)
 
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')

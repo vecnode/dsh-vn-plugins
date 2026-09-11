@@ -100,8 +100,10 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   for `[dsh-editor]` errors if it still does not show. The bar itself is the
   pack's own (`dsh-rightbar`), forked from the `0.1.5-rc.1` line.
 - **A text file opens in the read-only preview** — that extension belongs to a
-  shipped preview (`.md`, `.html`, images, `.pdf`, …) or the path is outside the
-  conversation folder; the editor deliberately leaves those alone.
+  shipped preview (`.html`, images, `.pdf`, …) or the path is outside the
+  conversation folder; the editor deliberately leaves those alone. Markdown is
+  *not* one of them: `.md` opens editable, and its toolbar's **Preview** button
+  opens the rendered view.
 - **Save-as says the name is taken / the folder is missing** — pick another name
   (`409 EXISTS`), or use a subfolder that already exists (`404 NO_FOLDER`):
   nothing creates directories.
@@ -118,5 +120,14 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   the shipped `@deepseek-ai/dsh-client-ui-theme` service (row `ui-theme`) is not
   in the boot graph — the tooltip says "The theme service is unavailable".
 - **Code text looks black-on-dark in the light theme** — the editor follows the
-  app's appearance; confirm the served `dsh-editor` bundle prints alpha.5 or
+  app's appearance; confirm the served `dsh-editor` bundle prints alpha.6 or
   later in a tab's file bar and hard-refresh (Ctrl+F5).
+- **"Preview" says it is unavailable** — the right bar's controller could not be
+  reached (the bar must be mounted, which it is while the editor tab is on
+  screen) or the shipped document preview is not in the graph; the banner says
+  which.
+- **The rendered Markdown view is still dark, or unreadable on white** — that is
+  `dsh-themes`' Markdown paper: it copies ui-theme's light palette out of the
+  theme's own stylesheets at boot, and it injects nothing when it cannot read
+  them (forcing white without the tokens would be worse). Reinstall so
+  `dsh-themes` alpha.2+ is in the profile, then restart.
