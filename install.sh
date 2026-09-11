@@ -10,8 +10,9 @@
 #  again always installs the latest edits, even when the profile already
 #  lists the same version. Passing -Force yourself is still accepted.
 #
-#  Needs PowerShell 7 (pwsh):  https://aka.ms/powershell
-#  Shell builtins only - no dirname/basename/coreutils required.
+#  Needs Node.js (>= 22) with npm/npx - NOT PowerShell. The work lives in
+#  scripts/install-all.sh, which install.bat's PowerShell twin mirrors with
+#  scripts/install-all.ps1.
 # ============================================================
 set -u
 
@@ -21,22 +22,14 @@ case "$0" in
 esac
 here=$(CDPATH= cd -- "$here" && pwd)
 
-if command -v pwsh >/dev/null 2>&1; then
-    shell_bin=$(command -v pwsh)
-elif command -v powershell >/dev/null 2>&1; then
-    shell_bin=$(command -v powershell)
-else
-    echo "dsh-vn-plugins: PowerShell 7 (pwsh) is required - https://aka.ms/powershell" >&2
-    exit 1
-fi
-
 # Same default as install.bat: force a re-add unless the caller asked already.
 extra="-Force"
 case " $* " in
-    *" -Force "*|*" -force "*) extra="" ;;
+    *" -Force "*|*" -force "*|*" --force "*) extra="" ;;
 esac
 
-"$shell_bin" -NoProfile -File "$here/scripts/install-all.ps1" "$@" $extra
+# shellcheck disable=SC2086
+sh "$here/scripts/install-all.sh" "$@" $extra
 status=$?
 
 echo

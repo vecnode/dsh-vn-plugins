@@ -1,18 +1,24 @@
 # Installing dsh-vn-plugins (Windows, macOS, Linux)
 
 Quickest path: double-click **`install.bat`** on Windows, or run
-**`./install.sh`** on macOS/Linux. Both are thin wrappers around the same
-OS-neutral PowerShell script.
+**`./install.sh`** on macOS/Linux. Windows runs the PowerShell half
+(`scripts/install-all.ps1`); macOS/Linux run the POSIX shell half
+(`scripts/install-all.sh`) and need **no PowerShell at all**.
 
 ## Requirements
 
-- **Windows 10/11** with the built-in PowerShell 5.1, **or** macOS/Linux with
-  **PowerShell 7+ (`pwsh`)** — https://aka.ms/powershell
-- Node.js 22+ (needed to run dsh and pnpm) — https://nodejs.org
-- `pnpm` is bootstrapped automatically into `./tools` when missing
+- **Windows 10/11**: the built-in Windows PowerShell 5.1 (or PowerShell 7)
+- **macOS / Linux**: a POSIX shell (the system `sh` is enough) — nothing else
+- **Node.js 22+** on every platform (it runs dsh, pnpm and the JSON parsing)
+  — https://nodejs.org
+- `pnpm` is reused when the system one is new enough for the profile, otherwise
+  bootstrapped automatically into `./tools`
 - macOS/Linux only: the launchers need the executable bit, which git preserves
   (`chmod +x install.sh uninstall.sh scripts/*.sh` if you copied the files by
   hand)
+
+> `scripts/sync-vendored.ps1` (the maintainer fork re-sync) is the one script
+> here that is PowerShell-only; the installers never call it.
 
 ## What gets targeted
 
@@ -34,15 +40,18 @@ Overrides if the profile lives somewhere else:
 
 ## The launchers
 
-| Platform | Friendly (adds `-Force`) | Console |
+| Platform | Friendly (adds force-re-add) | Console |
 |---|---|---|
 | Windows | `install.bat` / `uninstall.bat` | `scripts\install-all.bat` / `scripts\uninstall-all.bat` |
 | macOS / Linux | `./install.sh` / `./uninstall.sh` | `./scripts/install-all.sh` / `./scripts/uninstall-all.sh` |
-| any (direct) | `pwsh -NoProfile -File scripts/install-all.ps1 -Force` | `pwsh -NoProfile -File scripts/uninstall-all.ps1` |
+| Windows (direct) | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install-all.ps1 -Force` | same with `uninstall-all.ps1` |
+| macOS / Linux (direct) | `sh scripts/install-all.sh -Force` | `sh scripts/uninstall-all.sh` |
 
-The friendly launchers pass `-Force` unless you already did, so running them
-again always installs the latest edits. The console launchers behave like plain
-script runs: they skip bundles that are already installed at the same version.
+The friendly launchers pass the force flag unless you already did, so running
+them again always installs the latest edits. The console launchers behave like
+plain script runs: they skip bundles that are already installed at the same
+version. Both halves accept the same flags (`-Force`, `-Plugin`, `-DshHome`,
+`-ProfileName`, `-DshVersion`, `-Target web|cli`), and `--help` prints them.
 
 ## Manual path (no script)
 
@@ -74,20 +83,28 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
    (top right). It opens on the shipped **Start** page, whose capsules list the
    Files tab and the new **Editor**. The tab strip's **"+"** opens that Start
    page again at any time.
-3. Click a **text/code file** in the Files tab to open it in the **Editor**;
-   Markdown, images and PDFs keep their own preview tabs. Picking *Editor* from
-   the "+" page starts a **blank** file: **Save** (or Ctrl+S) asks for its name
-   with its extension and creates it in the conversation folder.
+3. Click a **text/code file** in the Files tab to open it in the **Editor** —
+   **Markdown included**: `.md` opens as editable text, and its toolbar's
+   **Preview** button (or the rendered page's **Edit** button) flips between the
+   editor and the rendered view on the same tab. Images and PDFs keep their own
+   preview tabs. Picking *Editor* from the "+" page starts a **blank** file:
+   **Save** (or Ctrl+S) asks for its name with its extension and creates it in
+   the conversation folder.
 4. Enter your API key in **Settings → Models** — installers never touch keys.
 
 ## Troubleshooting
 
-- **`dsh` exits non-zero during install** — run again with `-Verbose` to see the
-  exact command; most often this is a network hiccup fetching the pinned CLI.
+- **`dsh` exits non-zero during install** — most often a network hiccup fetching
+  the pinned CLI; re-run, and use `-Verbose` on the PowerShell half to see the
+  exact command.
 - **Profile not found** — pass `-DshHome`/`-ProfileName`, or run
   `npx @deepseek-ai/dsh web` once so the profile exists.
-- **`pwsh: command not found` (macOS/Linux)** — install PowerShell 7:
-  https://aka.ms/powershell
+- **`./install.sh` says a command is missing** — install Node.js 22+
+  (https://nodejs.org). The macOS/Linux half needs Node and npm/npx only; it
+  never needs PowerShell.
+- **`sh: scripts/install-all.sh: not found` (or a syntax error)** — run it from
+  the repo root or with its full path, and keep the POSIX half dash-compatible
+  (`sh -n scripts/install-all.sh` is the syntax check).
 - **`./install.sh: Permission denied`** — `chmod +x install.sh uninstall.sh
   scripts/*.sh`.
 - **`-Target desktop` is rejected** — intentional: DSH Desktop is no longer a
@@ -120,12 +137,16 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   the shipped `@deepseek-ai/dsh-client-ui-theme` service (row `ui-theme`) is not
   in the boot graph — the tooltip says "The theme service is unavailable".
 - **Code text looks black-on-dark in the light theme** — the editor follows the
-  app's appearance; confirm the served `dsh-editor` bundle prints alpha.6 or
+  app's appearance; confirm the served `dsh-editor` bundle prints alpha.7 or
   later in a tab's file bar and hard-refresh (Ctrl+F5).
 - **"Preview" says it is unavailable** — the right bar's controller could not be
   reached (the bar must be mounted, which it is while the editor tab is on
   screen) or the shipped document preview is not in the graph; the banner says
   which.
+- **The rendered Markdown page has no "Edit" button** — that button is the
+  editor's own document body, which shadows the shipped one at a lower slot
+  priority; confirm the boot HTML lists `dsh-editor/client.js` at alpha.7+ and
+  restart.
 - **The rendered Markdown view is still dark, or unreadable on white** — that is
   `dsh-themes`' Markdown paper: it copies ui-theme's light palette out of the
   theme's own stylesheets at boot, and it injects nothing when it cannot read

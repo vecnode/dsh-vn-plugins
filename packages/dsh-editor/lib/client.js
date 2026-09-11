@@ -23,7 +23,10 @@
  *     document preview - named by kind, because the registry's ranking would
  *     otherwise hand it straight back to this `extension`-band type - so the
  *     rendered document is always one click away and its tab takes the editor
- *     tab's place;
+ *     tab's place. Since alpha.7 that preview is a **toggle**: this package also
+ *     registers the rendered Markdown DOCUMENT body (shadowing the shipped one
+ *     through the keyed slot's priority rule), and that body carries an **Edit**
+ *     button which hands the same file straight back to this editor;
  *   - it contributes a guide entry, so the tab strip's "+" control - which
  *     opens the "Start" page - offers "Editor". Picking it creates an editor
  *     tab that opens on a BLANK document: nothing is read from disk until the
@@ -83,6 +86,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const { useEffect, useRef } = React
+    const { MarkdownText } = require('@deepseek-ai/dsh-client-ui-primitives')
 
     // ---------------------------------------------------------------------
     // Constants
@@ -100,7 +104,7 @@ window.__ModuleLoader__.load({
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the toolbar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.6'
+    const PLUGIN_VERSION = '0.1.0-alpha.7'
     /** The client service dsh-modal provides; resolved lazily, never required. */
     const MODAL_SERVICE = 'modals'
     /** The client service @deepseek-ai/dsh-client-ui-theme provides; resolved lazily too. */
@@ -171,6 +175,15 @@ window.__ModuleLoader__.load({
 .dse-titleDot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-warning-primary,#d29922);margin-right:5px;vertical-align:middle}
 /* The blank tab's placeholder path: a new document has no name until it is saved. */
 .dse-filePath.dse-untitled{font-style:italic;color:var(--dsw-alias-label-tertiary,#999)}
+/* The rendered Markdown view: the editor's own document body inside the shipped
+   preview. The bar is a sticky overlay so the way back to editing stays in reach
+   while the page scrolls; it ignores pointer events except on the button, so it
+   never blocks selecting text underneath. */
+.dse-mdview{display:flex;flex-direction:column;min-height:100%;box-sizing:border-box}
+.dse-mdviewBar{position:sticky;top:0;z-index:3;display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:6px 8px 0;pointer-events:none}
+.dse-mdviewEdit{pointer-events:auto;display:inline-flex;align-items:center;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:12px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#1f1f1f);font:inherit;font-size:11.5px;padding:0 10px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.dse-mdviewEdit:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
+.dse-mdviewPaper{flex:1;min-height:0}
 `
     const CSS_TAG = 'dsh-editor/editor.css'
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
@@ -773,8 +786,10 @@ window.__ModuleLoader__.load({
        * Hand this document to the RENDERED preview: the shipped document preview
        * type claims the address, and the preview tab takes this one's place, so
        * the pair Edit <-> Preview is one tab that cannot drift from the file it
-       * names. Unsaved edits are NOT included (the preview reads the file), so
-       * the button warns instead of silently showing the older text.
+       * names. The rendered page carries the way back (the **Edit** button this
+       * package's own document body draws). Unsaved edits are NOT included (the
+       * preview reads the file), so the button warns instead of silently showing
+       * the older text.
        */
       function requestPreview() {
         if (!file) return
@@ -1463,6 +1478,106 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
+    // The rendered Markdown view, with the way back to editing.
+    //
+    // The shipped document preview draws a Markdown file in its own tab (kind
+    // `text`) and dispatches the DOCUMENT body through the keyed slot
+    // `sidebar.right.tab.document`, keyed by the implementation id its registry
+    // selected. This bundle registers the SAME key at a LOWER priority, which is
+    // the slot system's shadowing rule (`lowest renders`): the shipped body keeps
+    // its metadata, loading/paging, wrap and reload chrome, and only the body
+    // itself is ours - so the rendered page can carry the **Edit** toggle that
+    // takes the reader back to the editor, which is what makes Preview a toggle
+    // instead of a one-way door. Uninstalling this package brings the shipped
+    // body back with no residue.
+    //
+    // The body contract is the shipped one: props `{ resourceAddress, content,
+    // wrap, scrollportRef }` from the preview, `t` from the locale named on the
+    // registration, and the session tab hooks the slot's declaration injects.
+    // ---------------------------------------------------------------------
+    /** The document-body slot inside the preview tab. */
+    const DOCUMENT_SLOT = 'sidebar.right.tab.document'
+    /** The shipped Markdown body's slot key (its implementation id, shadowed by ours). */
+    const MARKDOWN_BODY_KEY = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown'
+    /** Below the shipped body's default priority (0), which is what shadows it. */
+    const DOCUMENT_PRIORITY = -10
+    /** The copy namespace this body registers for its own labels. */
+    const MARKDOWN_NS = 'dsh-editor.markdown'
+
+    /** The rendered-view copy (MarkdownText's own chrome labels live here too). */
+    const zhMarkdown = {
+      'md.edit': '\u7f16\u8f91',
+      'md.editTitle': '\u5728\u7f16\u8f91\u5668\u4e2d\u7f16\u8f91\u6b64\u6587\u4ef6',
+      'md.copy': '\u590d\u5236',
+      'md.copied': '\u5df2\u590d\u5236',
+      'md.footnotes': '\u811a\u6ce8',
+    }
+    /** English dictionary, key-identical to the Chinese source of truth. */
+    const enMarkdown = {
+      'md.edit': 'Edit',
+      'md.editTitle': 'Edit this file in the editor',
+      'md.copy': 'Copy',
+      'md.copied': 'Copied',
+      'md.footnotes': 'Footnotes',
+    }
+
+    /**
+     * The rendered Markdown body: the same page the shipped implementation draws
+     * (`MarkdownText` inside the `[data-document-markdown]` root the light paper
+     * is scoped to), plus the sticky **Edit** toggle.
+     */
+    function MarkdownPreviewBody(props) {
+      const t = props.t
+      const content = props.content
+      // Hooks must be called unconditionally, and both are provided by the
+      // preview's own child declaration.
+      const info = typeof props.useTabInfo === 'function' ? props.useTabInfo() : null
+      const labels = React.useMemo(
+        () => ({
+          code: { copyLabel: t('md.copy'), copiedLabel: t('md.copied') },
+          footnotes: t('md.footnotes'),
+        }),
+        [t],
+      )
+      if (!content || content.kind !== 'text') return null
+      const address = typeof props.resourceAddress === 'string' ? props.resourceAddress : ''
+      const tabId = info && info.tab && typeof info.tab.id === 'string' ? info.tab.id : ''
+      const edit = props.edit
+      const backToEditor = () => {
+        try {
+          edit(address, tabId)
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('[dsh-editor] could not return to the editor', err && err.message ? err.message : err)
+        }
+      }
+      return h(
+        'div',
+        { className: 'dse-mdview' },
+        h(
+          'div',
+          { className: 'dse-mdviewBar' },
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'dse-mdviewEdit',
+              title: t('md.editTitle'),
+              'data-markdown-edit': true,
+              onClick: backToEditor,
+            },
+            t('md.edit'),
+          ),
+        ),
+        h(
+          'div',
+          { className: 'dse-mdviewPaper', 'data-document-markdown': true },
+          h(MarkdownText, { text: content.text, streaming: !content.eof, labels: labels }),
+        ),
+      )
+    }
+
+    // ---------------------------------------------------------------------
     // Registry definition
     // ---------------------------------------------------------------------
     function editorDefinition() {
@@ -1491,7 +1606,8 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     // Plugin entry
     // ---------------------------------------------------------------------
-    const inject = ['slots', 'sidebarRightTabs']
+    /** Services the activation waits for: the slot registry, the bar's tab registry, and copy. */
+    const inject = ['locale', 'slots', 'sidebarRightTabs']
 
     function apply(ctx) {
       pluginCtx = ctx
@@ -1538,16 +1654,46 @@ window.__ModuleLoader__.load({
        * @param tabId - the editor tab to replace.
        */
       function openPreviewNow(address, tabId) {
-        let controller = null
-        try {
-          controller = ctx.get ? ctx.get(SIDEBAR_SERVICE) : null
-        } catch (e) {
-          controller = null
-        }
-        if (!controller || typeof controller.openResource !== 'function') {
+        const controller = sidebarRightNow()
+        if (!controller) {
           throw new Error('The rendered preview is unavailable (the right bar is not mounted).')
         }
         controller.openResource(address, { kind: previewKindNow(), replaceTab: tabId })
+      }
+
+      /**
+       * The other half of the toggle: hand the rendered file back to THIS editor,
+       * named by our own kind (the `extension` band would claim it anyway, but
+       * naming it keeps the intent explicit), replacing the preview tab. The tab
+       * id comes from the body's own tab record; a body that could not read one
+       * falls back to the active tab, and failing that the editor opens beside
+       * the preview instead of doing nothing.
+       * @param address - the file address to edit.
+       * @param tabId - the preview tab to replace, when the body knew it.
+       */
+      function editFileNow(address, tabId) {
+        const controller = sidebarRightNow()
+        if (!controller) {
+          throw new Error('The editor is unavailable (the right bar is not mounted).')
+        }
+        let replace = typeof tabId === 'string' && tabId !== '' ? tabId : ''
+        if (replace === '') {
+          try {
+            const active = typeof controller.active === 'function' ? controller.active() : null
+            if (active && typeof active.id === 'string') replace = active.id
+          } catch (e) {}
+        }
+        controller.openResource(address, replace === '' ? { kind: EDITOR_KIND } : { kind: EDITOR_KIND, replaceTab: replace })
+      }
+
+      /** The right bar's navigation controller, or `null` when it is not mounted. */
+      function sidebarRightNow() {
+        try {
+          const controller = ctx.get ? ctx.get(SIDEBAR_SERVICE) : null
+          return controller && typeof controller.openResource === 'function' ? controller : null
+        } catch (e) {
+          return null
+        }
       }
 
       // Follow the app's color scheme. The theme service's own change event is
@@ -1613,6 +1759,32 @@ window.__ModuleLoader__.load({
               ),
             ),
           'dsh-editor: editor tab title',
+        )
+        ctx.effect(
+          () =>
+            ctx.locale.register(MARKDOWN_NS, {
+              zh: zhMarkdown,
+              en: enMarkdown,
+            }),
+          'dsh-editor: rendered Markdown dictionaries',
+        )
+        // Shadow the shipped Markdown document body so the rendered page carries
+        // the Edit toggle; see the rendered-view section above.
+        ctx.effect(
+          () =>
+            ctx.slots.inject(DOCUMENT_SLOT, () =>
+              ctx.slots.register(
+                {
+                  name: DOCUMENT_SLOT,
+                  key: MARKDOWN_BODY_KEY,
+                  priority: DOCUMENT_PRIORITY,
+                  locale: MARKDOWN_NS,
+                  inject: () => ({ edit: editFileNow }),
+                },
+                MarkdownPreviewBody,
+              ),
+            ),
+          'dsh-editor: rendered Markdown body',
         )
         ctx.logger?.debug?.('[dsh-editor] editor tab type registered (' + PLUGIN_VERSION + ')')
       } catch (err) {

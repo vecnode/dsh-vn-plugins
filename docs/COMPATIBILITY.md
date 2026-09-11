@@ -10,7 +10,7 @@ The pack targets the harness line DeepSeek ships to the raw web install
 | `@deepseek-ai/dsh` | `0.1.5-rc.1` |
 | Forked from | the same `0.1.5-rc.1` line (`.dsh-version.json`'s `vendoredFrom`) |
 | Install target | the web profile only (`$DSH_HOME/profiles/web`) |
-| Host platforms | Windows (PowerShell 5.1 or 7), macOS and Linux (PowerShell 7); the plugins themselves are plain JS and the only OS-specific code is the file-browser launcher |
+| Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell + Node.js and npm/npx - no PowerShell); the plugins themselves are plain JS and the only OS-specific code is the file-browser launcher |
 | Right bar | **owned by the pack** - `dsh-rightbar` / `dsh-rightbar-files` are forks of `@deepseek-ai/dsh-client-ui-sidebar-right` / `-sidebar-files`, and the core rows `ui-sidebar-right` / `ui-sidebar-files` are disabled |
 | Open In file managers | **owned by the pack** - `dsh-open-in-app` forks `@deepseek-ai/dsh-client-ui-open-in-app` (row `ui-open-in-app` disabled) and launches the OS file browser directly |
 
@@ -102,6 +102,15 @@ The pack targets the harness line DeepSeek ships to the raw web install
   **dsh-themes** carries the **Markdown paper**, which keeps that rendered view
   white in the dark theme by re-declaring ui-theme's own light declarations on
   it. No new packages, no core rows touched.
+- **editor alpha.7 / shell-installer alpha**: the rendered Markdown page now
+  carries an **Edit** button (the editor's own document body, shadowing the
+  shipped one at a lower slot priority), so **Preview is a toggle**: Editor →
+  Preview → Edit → Editor on the same tab and file. Separately, `install.sh` /
+  `uninstall.sh` and `scripts/install-all.sh` / `uninstall-all.sh` are **real
+  POSIX shell implementations** now - Node.js + npm/npx only - instead of
+  wrappers around PowerShell, so macOS/Linux hosts no longer need PowerShell at
+  all; the `.ps1` half stays the Windows path (`install.bat`), and
+  `scripts/sync-vendored.ps1` remains PowerShell-only maintainer tooling.
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the

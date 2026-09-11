@@ -512,53 +512,60 @@ the generated banner lists the applied patches.
 
 ## 10. The installer
 
-`scripts/install-all.ps1` / `uninstall-all.ps1` are **OS-neutral PowerShell**
-(ASCII only) and run on Windows PowerShell 5.1 and on PowerShell 7+ (`pwsh`)
-alike. The entry points are one pair per platform, each a thin wrapper over the
-same script: `install.bat` / `install.sh` (root, friendlier: they add `-Force`
-unless the caller already passed it) and the console twins
-`scripts/install-all.bat` / `.sh`. `scripts/sync-vendored.ps1` follows the same
-rule.
+The installer is **two halves, one behaviour** - the host picks the half, and
+neither half needs the other:
+
+| Host | Script | Runner | Needs |
+|---|---|---|---|
+| Windows | `scripts/install-all.ps1` / `uninstall-all.ps1` | `scripts/*.bat`, root `install.bat` / `uninstall.bat` | Windows PowerShell 5.1 or 7 |
+| macOS / Linux | `scripts/install-all.sh` / `uninstall-all.sh` | `scripts/*.sh`, root `install.sh` / `uninstall.sh` | POSIX sh (dash/bash) + Node.js with npm/npx - **never PowerShell** |
+
+Both are ASCII-only; the `.sh` half is POSIX (no bashisms, no `sed`/`grep`
+pipelines - the JSON/YAML parsing is done by `node -e`, which is a prerequisite
+anyway), and both halves accept the same flags (`-Force`, `-Plugin`, `-DshHome`,
+`-ProfileName`, `-DshVersion`, `-Target web|cli`), print the same messages and
+reach the same profile state. The root launchers are the friendly pair: they add
+force-the-re-add semantics unless the caller asked already. `scripts/sync-vendored.ps1`
+is **maintainer tooling**, not an installer, and is the one script here that wants
+`pwsh` on macOS/Linux.
 
 - **Detection**: one target - `DSH_HOME` env, else `~/.dsh`; profile `web`
   (`-DshHome` / `-ProfileName` override both). `-Target` still exists but accepts
   only `web` and `cli`, and both mean the web profile, so a stale
   `-Target desktop` invocation fails loudly instead of silently doing nothing.
-- **Platform facts**: one block resolves the host once -
-  `$PSVersionTable.PSEdition` plus the (5.1-absent, so guarded) `$IsWindows` /
-  `$IsMacOS` variables - and derives the path separator, the directory separator,
-  the home directory (`HOME`, else `USERPROFILE`, else the profile-folder API) and
-  each tool's name (`npx.cmd` / `npm.cmd` / `pnpm.cmd` on Windows, bare names
-  elsewhere) through `Get-ToolPath` / `Get-ToolNames`. Every path is built with
-  `Join-Path`; nothing hardcodes `\`, `%USERPROFILE%` or `powershell.exe`.
+- **Platform facts**: each half resolves its own host once. The PowerShell half
+  derives the path separator, the directory separator, the home directory
+  (`HOME`, else `USERPROFILE`, else the profile-folder API) and each tool's name
+  (`npx.cmd` / `npm.cmd` / `pnpm.cmd` on Windows, bare names elsewhere) through
+  `Get-ToolPath` / `Get-ToolNames`, and builds every path with `Join-Path`. The
+  shell half needs none of that: it is already on a POSIX host, so it uses
+  `command -v`, `${VAR%pattern}` and a `case`-based argument loop.
 - **dsh/pnpm invocation**: every operation runs
-  `npx --yes @deepseek-ai/dsh@<pinned>` (pinned in `.dsh-version.json`).
-  pnpm is bootstrapped locally under `tools/pnpm<major>`: the script reads the
-  profile's `node_modules/.modules.yaml`, picks the matching pnpm major, and
-  exports `npm_config_virtual_store_dir_max_length` + the workspace-root-check
-  opt-out (`npm_config_ignore_workspace_root_check=true`) because dsh profiles
-  are pnpm workspace roots (`packages: [.]`). The bootstrapped pnpm is taken from
-  `node_modules/.bin` (`pnpm.cmd` on Windows, `pnpm` elsewhere) and prepended to
-  `PATH` with `[System.IO.Path]::PathSeparator`.
-  npm is invoked through the `npm.cmd` spelling on Windows (a `npm.ps1`
-  resolution mangles `pkg@version` arguments) and as `npm` elsewhere.
-  A native command's stderr (npm warnings do this constantly) becomes a
-  terminating `NativeCommandError` under `$ErrorActionPreference = 'Stop'` the
-  moment its output is merged, so every `dsh`/`npm` call runs with that
-  preference relaxed and is judged by its exit code alone.
+  `npx --yes @deepseek-ai/dsh@<pinned>` (pinned in `.dsh-version.json`). pnpm is
+  reused when the system one is new enough and otherwise bootstrapped locally
+  under `tools/pnpm<major>`: both halves read the profile's
+  `node_modules/.modules.yaml`, pick the matching pnpm major, export
+  `npm_config_virtual_store_dir_max_length` and the workspace-root-check opt-out
+  (`npm_config_ignore_workspace_root_check=true`) because dsh profiles are pnpm
+  workspace roots (`packages: [.]`), and prepend the resolved pnpm bin directory
+  to `PATH`. The PowerShell half additionally invokes npm through the `npm.cmd`
+  spelling (a `npm.ps1` resolution mangles `pkg@version` arguments) and judges
+  native calls by exit code alone because stderr becomes a terminating
+  `NativeCommandError` under `$ErrorActionPreference = 'Stop'`.
 - **Idempotency**: bundles already in `dsh.profile.bundles` are skipped
-  unless `-Force` **or the repo version changed**.
-- **Dev sync**: `Get-EffectiveInstalledVersion` compares the repo
-  `package.json` version against the version the installed package reports. A
-  plain `install.bat` / `./install.sh` after a version bump therefore re-adds the
-  bundle, so development changes actually reach the profile.
+  unless the flag forces a re-add **or the repo version changed**.
+- **Dev sync**: both halves compare the repo `package.json` version against the
+  version the profile resolves (`Get-EffectiveInstalledVersion` in PowerShell,
+  `effective_version()` in shell). A plain `install.bat` / `./install.sh` after a
+  version bump therefore re-adds the bundle, so development changes actually
+  reach the profile.
 - **Live links**: the web profile installs every bundle (`dsh-rightbar`,
-  `dsh-rightbar-files`, `dsh-editor`, `dsh-modal`, `dsh-open-in-app`) as
-  `pnpm link:` junctions straight into this repo (`Test-LiveLink` detects this,
-  comparing paths case-insensitively on Windows and case-sensitively elsewhere).
-  Code edits then already apply - a restart of `npx @deepseek-ai/dsh web` plus a
-  hard browser refresh is all it takes; the installer prints that instead of
-  re-adding.
+  `dsh-rightbar-files`, `dsh-editor`, `dsh-modal`, `dsh-themes`,
+  `dsh-open-in-app`) as `pnpm link:` symlinks straight into this repo (detected by
+  `Test-LiveLink` / `is_live_link()`, comparing realpaths case-insensitively on
+  Windows). Code edits then already apply - a restart of
+  `npx @deepseek-ai/dsh web` plus a hard browser refresh is all it takes; the
+  installer prints that instead of re-adding.
 - **Fork re-sync**: `scripts/sync-vendored.ps1` is the installer's sibling for
   the three forked client bundles (§4, §9). It is *not* run by the installers -
   moving a fork forward is a reviewed change, not an install step. Its candidate
@@ -600,9 +607,9 @@ rule.
 | Two Files panels / a stray dock after upgrading | the retired `dsh-files` (or `dsh-focus`) bundle is still in the profile; re-run the installer (its prune removes both) |
 | No "Editor" in the "+" / Start page | the client bundle did not activate: check the browser console for `[dsh-editor]`; a `sidebarRightTabs` service that never appears leaves activation pending |
 | Editor says "Editor unavailable (HTTP 400)" on the engine | the Node route is missing `requestBody: 'buffered'`, so Connection's bridge throws before the handler runs and the web server answers a bare 400 |
-| Clicking a file opens the read-only preview instead of the editor | the address was vetoed by `canOpen`: a preview-owned extension (md/html/image/pdf/…), a path outside the session workspace, or an `absolute/…` address |
+| Clicking a file opens the read-only preview instead of the editor | the address was vetoed by `canOpen`: a preview-owned extension (html/image/pdf/…), a path outside the session workspace, or an `absolute/…` address. Markdown is NOT one of them - it opens in the editor |
 | Save-as says the name is taken / the folder is missing | `409 EXISTS` (pick another name - the dialog stays open with what you typed) or `404 NO_FOLDER` (a subfolder path must already exist; nothing creates directories) |
-| A `.md` saved from the editor did not become a tab of its own | intentional: a preview-owned extension keeps the editor surface (the preview cannot edit it), so the chip carries the file name through the tab-title store while the tab record stays `sidebar://editor` |
+| The rendered Markdown page has no **Edit** button | the editor's shadow body is not rendering: confirm the boot HTML lists `dsh-editor/client.js` at alpha.7+, and that the shipped body still registers under `sidebar.right.tab.document` keyed `@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown` (the key this pack's lower-priority entry shadows) |
 | Save-as shows no dialog, only a browser prompt | `dsh-modal` is not mounted, so the editor fell back to `window.prompt`; re-run the installer with `-Force` and restart to add the bundle |
 | The "Open In…" File Explorer entry still does nothing | the forked row is not the one running: confirm the boot HTML lists `dsh-open-in-app/client.js` and not `@deepseek-ai/dsh-client-ui-open-in-app`, and that `dsh-open-in-app`'s layer still disables `ui-open-in-app` |
 | Editor tab says "Could not open the file" / `NO_WORKSPACE` | the session root could not be resolved (session not live and not persisted yet) or the path is outside the conversation folder; open the conversation once so its header is available |
@@ -611,12 +618,14 @@ rule.
 | No Themes button in the header | `dsh-themes` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or the row did not land: check the console for `[dsh-themes]` |
 | The Themes button is greyed out | the `theme` service never appeared, so `@deepseek-ai/dsh-client-ui-theme` (row `ui-theme`) is not in the boot graph; the tooltip says "The theme service is unavailable" |
 | Fork drift after a harness update | `scripts/sync-vendored.ps1 -Check` exits 1; run it without `-Check` and review the diff |
-| Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; scripts auto-match - re-run installer |
+| Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; both halves read it from `node_modules/.modules.yaml` and auto-match - re-run the installer |
 | `-Target desktop` is rejected | intentional: DSH Desktop is no longer a target of this pack |
 | `.ps1` parse error after editing | non-ASCII character crept in (smart quotes/dash); keep scripts ASCII-only |
+| `sh -n` fails after editing a `.sh` | a bashism crept into the POSIX half (arrays, `[[ ]]`, `local`); keep it dash-compatible |
 | `./install.sh: Permission denied` | the executable bit was lost in a copy: `chmod +x install.sh uninstall.sh scripts/*.sh` |
-| `./install.sh` reports that a command is missing | PowerShell 7 is not installed: `brew install --cask powershell` (macOS) or the package for your distro - https://aka.ms/powershell |
-| A path with a backslash fails on macOS/Linux | a Windows-only path crept into a `.ps1`: build paths with `Join-Path` and take the separator from `[System.IO.Path]` |
+| `./install.sh` reports a missing command | Node.js (with npm/npx) is not installed - the shell half needs Node, never PowerShell: https://nodejs.org |
+| `scripts/sync-vendored.ps1` cannot find `pwsh` | expected on a host without PowerShell 7: that script is maintainer tooling. Install PowerShell 7 (`brew install --cask powershell`, or the package for your distro) or run it on Windows |
+| A path with a backslash fails on macOS/Linux | a Windows-only path crept into the PowerShell half (the POSIX half never sees one): build paths with `Join-Path` and take the separator from `[System.IO.Path]` |
 
 See also: `docs/INSTALL.md` (human steps) and `docs/COMPATIBILITY.md`
 (version matrix).

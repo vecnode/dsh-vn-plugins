@@ -17,10 +17,18 @@
       "vendors": ["@deepseek-ai/dsh-client-ui-sidebar-files"]
     },
     "dsh-editor": {
-      "version": "0.1.0-alpha.6",
+      "version": "0.1.0-alpha.7",
       "rows": ["editor"],
       "rowOverrides": [],
-      "uses": ["dsh-modal", "@deepseek-ai/dsh-client-ui-theme", "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"]
+      "uses": ["dsh-modal", "@deepseek-ai/dsh-client-ui-theme", "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"],
+      "shadowsSlots": [
+        {
+          "slot": "sidebar.right.tab.document",
+          "key": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown",
+          "priority": -10,
+          "why": "the rendered Markdown body carries the Edit toggle back into the editor (lower priority renders)"
+        }
+      ]
     },
     "dsh-modal": {
       "version": "0.1.0-alpha.1",

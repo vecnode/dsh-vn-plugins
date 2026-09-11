@@ -1,19 +1,23 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Removes the dsh-vn-plugins bundle set from the DeepSeek Harness web profile on
-    this machine (Windows, macOS, or Linux), together with any retired bundle
-    name this pack shipped before (dsh-focus, dsh-files). Removing a bundle also
-    removes its patch layer.
+    Removes the dsh-vn-plugins bundle set from the DeepSeek Harness web profile,
+    together with any retired bundle name this pack shipped before (dsh-focus,
+    dsh-files). Removing a bundle also removes its patch layer.
 
 .DESCRIPTION
+    This is the WINDOWS half of the uninstaller. macOS and Linux run
+    scripts/uninstall-all.sh instead (plain POSIX shell - Node.js with npm/npx
+    and no PowerShell at all); both halves take the same flags and reach the same
+    profile state.
+
     One target only: the raw CLI/web install used by "npx @deepseek-ai/dsh web"
     (DSH_HOME, else ~/.dsh, profile "web" by default). DSH Desktop is not
     supported by this pack.
 
     Runs on Windows PowerShell 5.1 and on PowerShell 7+ (pwsh); the launchers are
-    uninstall.bat (Windows) and uninstall.sh (macOS/Linux). Every path, executable
-    name and the PATH separator is resolved per platform.
+    uninstall-all.bat and the root uninstall.bat. Every path, executable name and
+    the PATH separator is resolved per platform.
 
     pnpm handling: the harness profile stores its pnpm layout in
     node_modules/.modules.yaml. The matching local pnpm major is bootstrapped

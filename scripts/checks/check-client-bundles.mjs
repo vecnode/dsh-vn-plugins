@@ -133,9 +133,12 @@ function loadBundle(relative, extraRequire) {
       // are enough for a static render to reach the markup a bundle builds.
       const Anchor = (props) => (props && props.anchor !== undefined ? props.anchor : null)
       const Child = (props) => (props && props.children !== undefined ? props.children : null)
+      // MarkdownText renders its text: the editor's rendered-view body draws it.
+      const Text = (props) => props.text
       return {
         Menu: Anchor,
         Tooltip: Child,
+        MarkdownText: Text,
         IconChevronDownOutline14: Null,
         IconLightOutline16: Null,
         IconDarkOutline16: Null,
@@ -211,10 +214,11 @@ await alertPromise
 // --------------------------------------------------------------- dsh-editor
 const editor = loadBundle('packages/dsh-editor/lib/client.js', {})
 check('editor bundle id', editor.id, 'dsh-editor')
-check('editor inject', JSON.stringify(editor.exports.inject), '["slots","sidebarRightTabs"]')
+check('editor inject', JSON.stringify(editor.exports.inject), '["locale","slots","sidebarRightTabs"]')
 const registered = {}
 const types = []
 const previewCalls = []
+const editorLocales = {}
 const tabTypes = {
   register(definition) {
     types.push(definition)
@@ -235,6 +239,12 @@ editor.exports.apply({
       return () => {}
     },
   },
+  locale: {
+    register(namespace, dictionaries) {
+      editorLocales[namespace] = dictionaries
+      return () => {}
+    },
+  },
   sidebarRightTabs: tabTypes,
   effect: (fn) => fn(),
   logger: { debug() {}, warn() {} },
@@ -247,13 +257,52 @@ check('claims markdown', types[0].canOpen('dsh-resource://file/session/s1/readme
 check('vetoes html', types[0].canOpen('dsh-resource://file/session/s1/page.html'), false)
 check('vetoes absolute', types[0].canOpen('dsh-resource://file/session/s1/C:/x.ts'), false)
 check('guide entry', types[0].guide.map((entry) => entry.title()).join(','), 'Editor')
-check('body + title seats', Object.keys(registered).sort().join(','), 'sidebar.right.pane.tab#dsh-editor,sidebar.right.pane.tab.title#dsh-editor')
+const editorSeats = Object.keys(registered).sort().join(',')
+check(
+  'editor seats',
+  editorSeats,
+  'sidebar.right.pane.tab#dsh-editor,sidebar.right.pane.tab.title#dsh-editor,sidebar.right.tab.document#@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown',
+)
 const facade = registered['sidebar.right.pane.tab#dsh-editor'].spec.inject()
 check('body resolves modals lazily', facade.getModals(), modals)
 facade.openPreview('dsh-resource://file/session/s1/readme.md', 'tab2')
 check('preview names the registry kind', previewCalls[0].options.kind, 'renamed-preview')
 check('preview replaces the editor tab', previewCalls[0].options.replaceTab, 'tab2')
 check('preview keeps the address', previewCalls[0].address, 'dsh-resource://file/session/s1/readme.md')
+
+// The rendered Markdown body shadows the shipped one (lower priority renders) and
+// carries the Edit toggle back into the editor.
+const markdownSeat = registered['sidebar.right.tab.document#@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown']
+check('shadow body priority', markdownSeat.spec.priority < 0, true)
+check('shadow body locale', markdownSeat.spec.locale, 'dsh-editor.markdown')
+check('markdown dictionaries', Object.keys(editorLocales).join(','), 'dsh-editor.markdown')
+const markdownInjected = markdownSeat.spec.inject()
+check('shadow body injects edit', typeof markdownInjected.edit, 'function')
+previewCalls.length = 0
+markdownInjected.edit('dsh-resource://file/session/s1/readme.md', 'tab7')
+check('edit reopens the file in the editor', previewCalls[0].options.kind, 'editor')
+check('edit replaces the preview tab', previewCalls[0].options.replaceTab, 'tab7')
+const markdownCopy = {
+  'md.edit': 'Edit',
+  'md.editTitle': 'Edit this file in the editor',
+  'md.copy': 'Copy',
+  'md.copied': 'Copied',
+  'md.footnotes': 'Footnotes',
+}
+const markdownT = (key) => (markdownCopy[key] === undefined ? key : markdownCopy[key])
+const MarkdownPreviewBody = markdownSeat.component
+const renderedMarkdown = renderToStaticMarkup(
+  h(MarkdownPreviewBody, {
+    t: markdownT,
+    content: { kind: 'text', text: '# Title', eof: true },
+    resourceAddress: 'dsh-resource://file/session/s1/readme.md',
+    useTabInfo: () => ({ tab: { id: 'tab7' } }),
+    edit: markdownInjected.edit,
+  }),
+)
+check('rendered body draws the page', renderedMarkdown.includes('data-document-markdown') && renderedMarkdown.includes('# Title'))
+check('rendered body offers Edit', renderedMarkdown.includes('data-markdown-edit') && renderedMarkdown.includes('>Edit<'))
+check('rendered body ignores non-text', renderToStaticMarkup(h(MarkdownPreviewBody, { t: markdownT, content: { kind: 'image' } })), '')
 const Body = registered['sidebar.right.pane.tab#dsh-editor'].component
 const blankTab = { id: 'tab1', contentId: 'sidebar://editor', title: 'Editor', navigation: { revision: 0 } }
 const fileTab = { id: 'tab2', contentId: 'dsh-resource://file/session/s1/src/app.ts', title: 'app.ts', navigation: { revision: 3 } }
@@ -284,6 +333,7 @@ editorBare.exports.apply({
       return () => {}
     },
   },
+  locale: { register: () => () => {} },
   sidebarRightTabs: { register: () => () => {}, entries: () => [] },
   effect: (fn) => fn(),
   logger: { debug() {}, warn() {} },

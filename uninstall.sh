@@ -5,8 +5,9 @@
 #  with any retired bundle name it shipped before (dsh-focus, dsh-files).
 #  Removing a bundle also removes its patch layer.
 #
-#  Needs PowerShell 7 (pwsh):  https://aka.ms/powershell
-#  Shell builtins only - no dirname/basename/coreutils required.
+#  Needs Node.js (>= 22) with npm/npx - NOT PowerShell. The work lives in
+#  scripts/uninstall-all.sh, which uninstall.bat's PowerShell twin mirrors with
+#  scripts/uninstall-all.ps1.
 # ============================================================
 set -u
 
@@ -16,16 +17,7 @@ case "$0" in
 esac
 here=$(CDPATH= cd -- "$here" && pwd)
 
-if command -v pwsh >/dev/null 2>&1; then
-    shell_bin=$(command -v pwsh)
-elif command -v powershell >/dev/null 2>&1; then
-    shell_bin=$(command -v powershell)
-else
-    echo "dsh-vn-plugins: PowerShell 7 (pwsh) is required - https://aka.ms/powershell" >&2
-    exit 1
-fi
-
-"$shell_bin" -NoProfile -File "$here/scripts/uninstall-all.ps1" "$@"
+sh "$here/scripts/uninstall-all.sh" "$@"
 status=$?
 
 echo

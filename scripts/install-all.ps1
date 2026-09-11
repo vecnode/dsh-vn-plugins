@@ -2,18 +2,24 @@
 <#
 .SYNOPSIS
     Installs the dsh-vn-plugins bundle set into the DeepSeek Harness web profile
-    on this machine (Windows, macOS, or Linux).
+    on this machine.
 
 .DESCRIPTION
+    This is the WINDOWS half of the installer. macOS and Linux run
+    scripts/install-all.sh instead (plain POSIX shell - Node.js with npm/npx and
+    no PowerShell at all); both halves do the same work with the same flags,
+    print the same messages and reach the same profile state, so keep them in
+    step.
+
     One target only: the raw CLI/web install used by "npx @deepseek-ai/dsh web"
     (DSH_HOME, else ~/.dsh, profile "web" by default). DSH Desktop is
     deliberately NOT supported by this pack: the desktop app runs its own frozen
     generation snapshot and is no longer installed into.
 
     Runs on Windows PowerShell 5.1 and on PowerShell 7+ (pwsh). The launchers are
-    install.bat (Windows) and install.sh (macOS/Linux); every path, executable
-    name and the PATH separator is resolved per platform, so nothing here assumes
-    Windows.
+    install-all.bat and the root install.bat; every path, executable name and the
+    PATH separator is resolved per platform, so nothing here assumes a particular
+    Windows layout.
 
     pnpm handling: the harness profile stores its pnpm layout in
     node_modules/.modules.yaml. The matching local pnpm major is bootstrapped
@@ -40,7 +46,7 @@
 .EXAMPLE
     .\install-all.ps1
 .EXAMPLE
-    pwsh -NoProfile -File scripts/install-all.ps1 -Force     # macOS / Linux
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-all.ps1 -Force
 #>
 [CmdletBinding()]
 param(

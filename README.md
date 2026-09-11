@@ -1,29 +1,30 @@
 # dsh-vn-plugins
 
-Personal plugin pack for **DeepSeek Harness**, installed into the **web profile**
-only — the raw install you run with `npx @deepseek-ai/dsh web` (profile `web`
-under `$DSH_HOME`, default `~/.dsh`). **DSH Desktop is not supported** by this
-pack.
+![Language: JavaScript](https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
-Everything ships as standard **dsh bundles** (npm packages with
-`dsh.bundle`/`dsh.client` + a `cordis.patch.yml` layer), so install and
-uninstall are clean and nothing patches core Harness files. The plugins are
-plain JavaScript, and the launchers run on **Windows, macOS and Linux**.
+![DeepSeek Harness 0.1.5-rc.1](https://img.shields.io/badge/dsh-0.1.5--rc.1-4f8cff)
+![Target: web profile](https://img.shields.io/badge/target-web%20profile-blueviolet)
+
+Personal plugin pack for **DeepSeek Harness**.
+
+Everything ships as standard **dsh bundles**. The plugins are
+plain JavaScript, and the launchers run on **Windows, macOS and Linux** — the
+Windows half is PowerShell, the macOS/Linux half is plain POSIX shell.
 
 ## Plugins (all **alpha** until the owner promotes them)
 
-`dsh-rightbar` is the **master**: it owns the right bar the other two live in.
-`dsh-themes` is the pack's only header-level control; it drives the shipped
-theme service rather than replacing it.
+Each package's own README is the reference for what it does, why it is built that
+way and what it touches; the table below is the map.
 
 | Package | What it does | Status |
 |---|---|---|
-| [`packages/dsh-rightbar`](packages/dsh-rightbar) | **The right bar** — the pack's own fork of the harness right-hand column: tab strip with the **"+"** add control, docking panel (split / float / fullscreen), header expand button, the **Start** (guide) page, the tab-type registry (`sidebarRightTabs`) and controller (`sidebarRight`) other plugins register into, and the keyed tab body/title seats. Its bundle layer **hard-disables the shipped `ui-sidebar-right` / `ui-sidebar-files` rows**, so this copy is the one that runs. | alpha `0.1.0-alpha.1` |
-| [`packages/dsh-rightbar-files`](packages/dsh-rightbar-files) | **Files tab** — the session workspace tree as a tab type of the pack's bar (forked from the shipped `@deepseek-ai/dsh-client-ui-sidebar-files`, same disable-and-replace scheme). A file row opens its `dsh-resource://file/...` address, which the registry routes to whoever claims it. | alpha `0.1.0-alpha.1` |
-| [`packages/dsh-editor`](packages/dsh-editor) | **Editor tab** — a tab type registering into the bar above. Claims `dsh-resource://file/**` in the `extension` band, so opening a **text/code file** (a click in the Files tree, a file link in the conversation) opens it **editable** instead of in the read-only preview — **Markdown included**, with a toolbar **Preview** button that hands the file to the rendered view (replacing the editor tab, so Edit ⇄ Preview is one tab). HTML/images/PDF keep their own previews. Contributes a guide entry, so **"+"** offers **Editor**: picking it opens a **blank** document — nothing is read from disk and there is no browser inside the tab. **Save** (or Ctrl+S) asks for a file name **with its extension** in the shared dialog, creates the file where the tab was opened (this conversation's workspace folder) and turns the tab into that file's tab. Saving an already-open file is unchanged (find-in-file toolbar + atomic authenticated save). The editor **follows the app's light/dark appearance** — oneDark while the app is dark, a light theme while it is light — and re-themes live when the appearance changes, so a `.ps1` / `.gitignore` / `.txt` file (no syntax language) is never dark-on-dark. | alpha `0.1.0-alpha.6` |
-| [`packages/dsh-themes`](packages/dsh-themes) | **Themes button + appearance overrides** — one small control in the conversation header, the size of the buttons beside it and immediately **left of "Open In…"**. It opens a menu with the product's three appearances (**Light**, **Dark**, **System**) and its glyph shows the active one; the preference, its persistence and the `--dsw-*` tokens stay owned by the shipped `@deepseek-ai/dsh-client-ui-theme`, so this button and **Settings → General → Appearance** are the same switch. It also carries the pack's **appearance overrides**, starting with the **Markdown paper**: the rendered Markdown view keeps a white page in the dark theme, by re-declaring the theme's own light declarations on its root. | alpha `0.1.0-alpha.2` |
-| [`packages/dsh-modal`](packages/dsh-modal) | **Shared dialogs** — the pack's modal surface, provided as the client service **`modals`** (`ctx.get('modals')`: `open` / `alert` / `confirm` / `prompt`). One body-level overlay for the whole app, one dialog at a time, Escape/mask cancel, and `submit` work that runs **while the dialog stays open** so a failure is reported inline instead of losing what was typed. | alpha `0.1.0-alpha.1` |
-| [`packages/dsh-open-in-app`](packages/dsh-open-in-app) | **Open In: file managers** — fixes the Session header's **Open In…** file-browser entries. Fork of the shipped `@deepseek-ai/dsh-client-ui-open-in-app` browser bundle (same UI, one patched launch path) plus a Node half that opens the OS file browser **directly**: `explorer.exe` on Windows, `open` on macOS, `xdg-open` on Linux, WSL-aware — instead of the shipped shell-open verb, which reports success without opening anything on some hosts. Editors, Git GUIs and terminals keep using the shipped routes. | alpha `0.1.0-alpha.1` |
+| [`dsh-rightbar`](packages/dsh-rightbar/README.md) | **The right bar** — the pack's own fork of the harness right-hand column (tab strip, "+", docking, expand button, Start page) and the tab-type registry every other tab registers into. | alpha `0.1.0-alpha.1` |
+| [`dsh-rightbar-files`](packages/dsh-rightbar-files/README.md) | **Files tab** — the session workspace tree as a tab type of that bar. | alpha `0.1.0-alpha.1` |
+| [`dsh-editor`](packages/dsh-editor/README.md) | **Editor tab** — text/code files open **editable** (Markdown included, with a **Preview ⇄ Edit** toggle to the rendered page), blank documents are created and named from the "+" guide, and the CodeMirror palette follows the app's light/dark theme. | alpha `0.1.0-alpha.7` |
+| [`dsh-themes`](packages/dsh-themes/README.md) | **Themes** — the header's Light / Dark / System button (the same switch as Settings → Appearance) plus the pack's appearance overrides, starting with the always-light **Markdown paper** the rendered view is drawn on. | alpha `0.1.0-alpha.2` |
+| [`dsh-modal`](packages/dsh-modal/README.md) | **Shared dialogs** — the `modals` client service (`open` / `alert` / `confirm` / `prompt`) the editor's save-as dialog and any other plugin reach for. | alpha `0.1.0-alpha.1` |
+| [`dsh-open-in-app`](packages/dsh-open-in-app/README.md) | **Open In: file managers** — opens the OS file browser directly (Explorer / Finder / Files) instead of the shipped shell-open verb, so the header's file-manager entries actually work. | alpha `0.1.0-alpha.1` |
 
 > The pack used to ship its own Files panel (`dsh-files`, earlier `dsh-focus`)
 > with a private dock and header capsules; that was retired when the harness
@@ -34,46 +35,54 @@ theme service rather than replacing it.
 
 ## Install (Windows, macOS, Linux)
 
-The launchers are thin wrappers over the same PowerShell script, so every OS
-installs identically. PowerShell **7 (`pwsh`) is required on macOS/Linux**;
-Windows also accepts the built-in Windows PowerShell 5.1.
+Two launchers, one behaviour. **Windows** runs the PowerShell installer
+(`install.bat` → `scripts/install-all.ps1`; Windows PowerShell 5.1 or 7).
+**macOS and Linux** run the POSIX shell installer (`install.sh` →
+`scripts/install-all.sh`) and need **Node.js with npm/npx only — no PowerShell**.
 
 ```bat
 :: Windows - double-click install.bat, or:
 install.bat                  :: the web profile (the only target)
-install.bat -Target cli      :: same thing; "cli" is kept as an alias
+install.bat -Force           :: re-add bundles even when versions match
 ```
 
 ```sh
 # macOS / Linux
 ./install.sh                 # the web profile (the only target)
-./install.sh -Target cli     # same thing; "cli" is kept as an alias
+./install.sh -Force          # explicit; this launcher forces a re-add anyway
 ```
 
-Or drive the script directly on any OS:
+Or drive the platform script directly:
 
 ```powershell
-pwsh -NoProfile -File scripts/install-all.ps1 -Force
+:: Windows
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-all.ps1 -Force
 ```
 
-What it does (idempotent — safe to re-run):
+```sh
+# macOS / Linux
+sh scripts/install-all.sh -Force
+```
 
-1. pins the dsh version from `.dsh-version.json` and runs everything through
+Both halves do the same work (idempotent — safe to re-run):
+
+1. pin the dsh version from `.dsh-version.json` and run everything through
    `npx @deepseek-ai/dsh@<pinned>`,
-2. bootstraps a private copy of pnpm under `./tools` when pnpm is missing
-   (no admin rights, nothing global),
-3. resolves the web profile (`$DSH_HOME/profiles/web`, `$DSH_HOME` = env var or
+2. reuse a system pnpm when it is new enough for the profile, else bootstrap a
+   private copy under `./tools` (no admin rights, nothing global),
+3. resolve the web profile (`$DSH_HOME/profiles/web`, `$DSH_HOME` = env var or
    `~/.dsh`),
-4. **prunes retired bundle names** (`dsh-focus`, `dsh-files` — the pack's own
+4. **prune retired bundle names** (`dsh-focus`, `dsh-files` — the pack's own
    Files panel, now shipped by the harness itself) so an upgrade cannot
    double-mount,
-5. runs `dsh plugin --profile web add <bundle>` for every package under
-   `packages/` (skips already-installed bundles unless `-Force`),
-6. prints next steps. It never touches API keys — add yours in
+5. run `dsh plugin --profile web add <bundle>` for every package under
+   `packages/` (skips bundles already at the repo version unless `-Force`),
+6. print next steps. Neither half touches API keys — add yours in
    **Settings → Models**.
 
-Remove with **`uninstall.bat`** (Windows) or **`./uninstall.sh`** (macOS/Linux).
-Removing a bundle also removes its patch layer.
+Remove with **`uninstall.bat`** (Windows) or **`./uninstall.sh`** (macOS/Linux);
+each has the same `-Plugin` / `-DshHome` / `-ProfileName` switches. Removing a
+bundle also removes its patch layer.
 
 ## Notes
 
@@ -83,6 +92,8 @@ Removing a bundle also removes its patch layer.
   run `scripts/sync-vendored.ps1` to move the forks forward (see
   `packages/dsh-rightbar/README.md`). `dsh-open-in-app` is the one fork that is
   not byte-for-byte: its documented patches live in `sync-vendored.ps1`.
+  `sync-vendored.ps1` is **maintainer tooling** and is the one script in this
+  repo that wants PowerShell 7 (`pwsh`) on macOS/Linux — the installers never do.
 - **Language**: the UI halves are intentionally **plain JavaScript**, no build
   step — core client packages ship hand-written module-table bundles and the
   edit→restart loop stays instant. Three files are **generated, never
@@ -121,8 +132,10 @@ SECURITY.md            security policy: supported line, private reporting, harde
 packages/<bundle>/     one standalone dsh bundle (package.json + cordis.patch.yml + lib/)
   lib/index.js         Node half (may be a no-op row so the client bundle ships)
   lib/client.js        Browser half (module-table bundle; hand-written or GENERATED fork)
-scripts/               install-all.ps1, uninstall-all.ps1, sync-vendored.ps1 (OS-neutral
-                       PowerShell) plus their .bat (Windows) and .sh (macOS/Linux) twins
+scripts/               install-all.ps1 / uninstall-all.ps1 (Windows PowerShell) and
+                       install-all.sh / uninstall-all.sh (POSIX sh for macOS/Linux),
+                       plus sync-vendored.ps1 (maintainer fork re-sync) and the
+                       .bat / .sh console twins
   checks/              standalone verification for the JS halves (see its README)
 .dsh-version.json      the pinned harness line + per-package versions
 install.bat / .sh      double-click installer  |  uninstall.bat / .sh  remover
