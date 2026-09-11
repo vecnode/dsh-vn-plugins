@@ -24,14 +24,19 @@
  * unavailable instead of taking another plugin's activation down with it.
  *
  * It also carries the pack's appearance OVERRIDES - rules that hold one surface
- * on a fixed palette regardless of the app theme. The first (alpha.2) is the
+ * on a fixed palette regardless of the app theme, or give a core surface the
+ * frame's own dress. The first (alpha.2) is the
  * Markdown paper: the RENDERED Markdown view the shipped document preview draws
  * keeps a white page in the dark theme, by re-declaring ui-theme's own light
  * declarations on its root (see the paper section below). The second (alpha.3) is
  * the Markdown **chrome** override: a rendered Markdown page has one viewer, so
  * the preview header's viewer menu - which the shipped implementation fills with
  * "Markdown" and the plain-text fallback - is hidden on Markdown tabs (the way
- * to the editable surface is the editor's own **Edit** button on the page).
+ * to the editable surface is the editor's own **Edit** button on the page). The
+ * third (alpha.4) is the left column's **top bar**: the sidebar's branding row
+ * becomes the same 76px band, ending in the same hairline, that the middle and
+ * right columns already open with (see the top bar section below). All three are
+ * plain engine-neutral CSS, so they hold in every browser the Web GUI runs in.
  *
  * Module-table format of every core client package; no build step.
  */
@@ -54,7 +59,7 @@ window.__ModuleLoader__.load({
     /** The slot id of this occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.3'
+    const PLUGIN_VERSION = '0.1.0-alpha.5'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /** The Session header's utilities slot (the group the Open In control sits in). */
@@ -321,6 +326,81 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
+    // The left column's TOP BAR (alpha.4; the gap under the line is alpha.5).
+    // The frame opens with one band per
+    // column, and every column's band ends in the same hairline at y=76: the
+    // conversation header is `min-height:76px` with a `.5px`
+    // `--dsw-alias-border-l3` bottom border, and the right column's first line
+    // is the open tab's own header (the shipped Files tab is 38px tall under
+    // the 38px docking strip, which lands on that very same 76px). The left
+    // column had neither: its branding row was a vertically centred 60px row
+    // (so it ended at 66), and the collapsed rail changed BOTH the root's top
+    // padding (6px -> 18px) and that row's height (60px -> 36px) - anything
+    // drawn under it moved with the toggle.
+    //
+    // This gives the branding row the same band, in both rail states: the row
+    // keeps a 30px content strip at its top - the strip the conversation's own
+    // `titleRow` occupies - so the mark, the brand name and the collapse
+    // control sit ON the top bar, level with the conversation title (a common
+    // centre at the frame's y=25), and the hairline stays at y=76 whether the
+    // rail is open or collapsed.
+    //
+    // The row's own bottom edge IS the hairline, so the row keeps a bottom
+    // margin as the breathing room under it (the core's 8px open, 12px in the
+    // rail): with the margin zeroed, "New session" sat flush against the rule.
+    //
+    // Plain, engine-neutral CSS - no `:has()`, no `corner-shape`, nothing a
+    // non-Blink browser would drop - and it holds in either appearance. The
+    // selectors are the sidebar module's own hashed class names, pinned to the
+    // harness line in `.dsh-version.json`: on a bump that renames them this
+    // matches nothing and is a no-op, never a broken layout.
+    // ---------------------------------------------------------------------
+    /** The top bar override's style-tag identity (idempotent injection). */
+    const TOPBAR_TAG = 'dsh-themes/left-topbar.css'
+
+    /**
+     * Install the left column's top bar (alpha.4). Static CSS with no palette
+     * dependency beyond the border token itself, which carries a literal
+     * fallback for a profile that never mounts ui-theme - so, like the chrome
+     * override, it is installed once and needs no refresh on `theme/change`.
+     * @returns whether the rule is in place.
+     */
+    function installLeftTopBar() {
+      if (typeof document === 'undefined') return false
+      const topBar = [
+        // The rail keeps the frame's own 6px top padding, so the band's height,
+        // the hairline and the toggle's centre all stay put when it collapses.
+        'html .hHd-Xa_root.hHd-Xa_collapsed{padding-top:6px}',
+        // The band: 6px (root) + 70px = the 76px line the other two columns
+        // draw. `box-sizing` is border-box, so the .5px rule sits inside the
+        // 70px. The 4px / 35.5px split leaves a 30px content strip at the top,
+        // and the negative inline margins run the rule to both column edges.
+        // The 8px bottom margin is the breathing room the core gave the row
+        // (`margin-bottom:8px`): the row's own bottom IS the hairline, so this
+        // is the gap under the line, before "New session".
+        'html .hHd-Xa_root .hHd-Xa_logoRow{height:70px;margin:0 -12px 8px;padding:4px 12px 35.5px 16px;align-items:center;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18))}',
+        // The rail's own dress: 10px to bleed past (its root padding), a 36px
+        // strip for the 36px rail toggle centred on the same y=25, and the
+        // core's own 12px rail gap under the line.
+        'html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1px 10px 32.5px}',
+      ].join('')
+      let tag = null
+      try {
+        tag = document.querySelector('style[data-plugin-css=' + JSON.stringify(TOPBAR_TAG) + ']')
+      } catch (e) {
+        tag = null
+      }
+      if (!tag) {
+        tag = document.createElement('style')
+        tag.dataset.plugin = 'dsh-themes'
+        tag.dataset.pluginCss = TOPBAR_TAG
+        document.head.appendChild(tag)
+      }
+      if (tag.textContent !== topBar) tag.textContent = topBar
+      return true
+    }
+
+    // ---------------------------------------------------------------------
     // The theme snapshot as a `useSyncExternalStore` source: the service's own
     // snapshot object (stable until it changes) with a fallback, refreshed by
     // the service's `theme/change` event and once more after boot, in case
@@ -528,6 +608,10 @@ window.__ModuleLoader__.load({
 
       // One-shot: the viewer-menu override is static CSS.
       installMarkdownChrome()
+
+      // One-shot: the left column's top bar is static CSS too, and belongs to
+      // the frame rather than to any one appearance.
+      installLeftTopBar()
 
       try {
         ctx.effect(

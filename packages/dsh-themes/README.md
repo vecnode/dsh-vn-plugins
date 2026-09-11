@@ -1,4 +1,4 @@
-# dsh-themes (alpha.3)
+# dsh-themes (alpha.5)
 
 **Themes** adds one small control to the DeepSeek Harness web GUI's conversation
 header: a button, the size and dress of the header's other icon buttons, sitting
@@ -10,8 +10,11 @@ It also carries the pack's **appearance overrides** — rules that hold one surf
 on a fixed palette or a fixed shape whatever the app theme is. The first is the
 **Markdown paper** (alpha.2): the rendered Markdown view stays white in the dark
 theme. The second is the **Markdown chrome** (alpha.3): that same page has exactly
-one viewer, so the preview header's viewer menu is hidden on Markdown tabs. See
-below.
+one viewer, so the preview header's viewer menu is hidden on Markdown tabs. The
+third is the left column's **top bar** (alpha.4): the sidebar's branding row
+becomes the same 76px band, ending in the same hairline, that the middle and right
+columns open with. See below. All three are plain engine-neutral CSS, so they hold
+in whichever browser the Web GUI is opened in.
 
 It is a thin control, not a second theme system:
 
@@ -93,6 +96,59 @@ body [data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/
 - **Only the header control goes.** The path, the reload tool and the document
   itself are untouched, as is the page's **Edit** button.
 
+## The left column's top bar (alpha.4, gap alpha.5)
+
+The frame opens with one band per column, and every column's band ends in the same
+hairline at **y=76**:
+
+| column | its band | its line |
+|---|---|---|
+| left | `.hHd-Xa_logoRow` — was a vertically centred 60px row under the root's 6px padding, so it ended at 66 | **none at all** |
+| middle | the conversation header (`min-height:76px`, `padding:10px 28px 0 20px`) | `.5px solid var(--dsw-alias-border-l3)` at 76 |
+| right | the docking kit's 38px tab strip, then the open tab's own 38px header (the shipped Files tab) | the same hairline at 38+38 = **76** |
+
+The left column was the odd one out twice over: no rule under its branding row, and
+a collapsed rail that changed **both** the root's top padding (6px → 18px) and the
+row's height (60px → 36px) — so anything drawn under that row moved with the
+toggle. The override gives the branding row the other two columns' band, in both
+rail states:
+
+```css
+html .hHd-Xa_root.hHd-Xa_collapsed{padding-top:6px}
+html .hHd-Xa_root .hHd-Xa_logoRow{
+  height:70px;                       /* 6px root padding + 70 = the 76px line */
+  margin:0 -12px 8px;                /* rule to both edges; 8px under it       */
+  padding:4px 12px 35.5px 16px;      /* leaves a 30px content strip at the top */
+  align-items:center;
+  border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18));
+}
+html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1px 10px 32.5px}
+```
+
+- **The band, not the row.** The `4px` top / `35.5px` bottom split leaves a **30px**
+  content strip at the band's top — the strip the conversation's own `titleRow`
+  occupies — so the fish mark, the brand name and the collapse control sit **on**
+  the top bar with a common centre at the frame's **y=25**, level with the
+  conversation title, instead of being centred in a 60px row.
+- **Nothing moves when the rail collapses.** The rail keeps the frame's own 6px
+  top padding and its row is the same 70px band (its strip is 36px, the rail
+  toggle's own size, centred on the same y=25), so the hairline stays at y=76 and
+  the icon does not jump.
+- **Edge to edge.** The row bleeds past the root's inline padding by exactly that
+  padding (12px open, 10px in the rail), so the left line meets the middle line and
+  the column's own vertical border as one continuous rule.
+- **Breathing room under the line** (alpha.5). The row's bottom edge *is* the
+  hairline, so its bottom margin is the gap before **New session** — the core's own
+  8px when the sidebar is open and 12px in the rail. Zeroing that margin (as the
+  alpha.4 rule did) left the button flush against the rule.
+- **Pinned, and harmless if it drifts.** The selectors are the sidebar module's
+  hashed class names, which belong to the harness line in `.dsh-version.json`
+  (0.1.5-rc.1). On a bump that renames them this matches nothing — a no-op, never a
+  broken layout — and the fix is to re-read the new names, not to add `!important`.
+- **Static, installed once.** No palette to read beyond the border token, which
+  carries a literal fallback for a profile that never mounts ui-theme, so it gets
+  its own tag (`dsh-themes/left-topbar.css`) and needs no `theme/change` refresh.
+
 ## Where it sits
 
 The Session header is composed from slots
@@ -115,7 +171,8 @@ existing row's order is changed.
 cordis.patch.yml   bundle layer: inserts the 'themes' row (nothing else patched)
 lib/index.js       Node half: a no-op row, so the client bundle joins the boot graph
 lib/client.js      Browser half: the header button + menu, the snapshot reader, and
-                   the appearance overrides (the Markdown paper + the Markdown chrome)
+                   the appearance overrides (the Markdown paper, the Markdown
+                   chrome, and the left column's top bar)
 ```
 
 ## Behaviour worth keeping

@@ -542,6 +542,21 @@ const chrome = chromeTag ? chromeTag.textContent : ''
 check('chrome rule injected', chrome.includes('[data-document-viewer-menu]{display:none}'))
 check('chrome scoped to markdown', chrome.includes('body [data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown"]'))
 
+// The left column's top bar override (alpha.4): its own tag again. The band is
+// the sidebar root's 6px top padding plus a 70px row, i.e. the 76px hairline the
+// conversation header and the right column's tab header already draw; the rail
+// keeps the same 6px so neither the line nor the toggle moves when it collapses.
+const topBarTag = themes.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-themes/left-topbar.css').pop()
+const topBar = topBarTag ? topBarTag.textContent : ''
+check('top bar rule injected', topBar.includes('height:70px'))
+check('top bar keeps the 76px line', topBar.includes('padding:4px 12px 35.5px 16px'))
+check('top bar bleeds to both edges', topBar.includes('margin:0 -12px'))
+check('top bar clears New session', topBar.includes('margin:0 -12px 8px'))
+check('top bar draws the header hairline', topBar.includes('border-bottom:.5px solid var(--dsw-alias-border-l3'))
+check('top bar pins the rail padding', topBar.includes('.hHd-Xa_root.hHd-Xa_collapsed{padding-top:6px}'))
+check('top bar re-dresses the rail row', topBar.includes('.hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1px 10px 32.5px}'))
+check('top bar is engine-neutral', topBar.includes(':has('), false)
+
 // --------------------------------------------------------------- dsh-gittree
 const gitTree = loadBundle('packages/dsh-gittree/lib/client.js', {})
 const gitCssTag = gitTree.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-gittree/gittree.css').pop()
