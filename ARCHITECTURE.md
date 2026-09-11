@@ -68,6 +68,11 @@ packages/dsh-modal/               # sub-plugin: the shared dialog surface
   cordis.patch.yml    # inserts the 'modal' row (nothing else patched)
   lib/index.js        # Node half: no-op row (the overlay is browser-only)
   lib/client.js       # browser half: body-level overlay + the `modals` client service
+packages/dsh-themes/              # sub-plugin: the header's Themes control
+  package.json        # dsh.bundle + dsh.client
+  cordis.patch.yml    # inserts the 'themes' row (nothing else patched)
+  lib/index.js        # Node half: no-op row (the control is browser-only)
+  lib/client.js       # browser half: the Light/Dark/System button over `ctx.get('theme')`
 packages/dsh-open-in-app/         # the file-manager half of the Open In button
   package.json        # dsh.bundle + dsh.client (forks the shipped client bundle)
   cordis.patch.yml    # disables ui-open-in-app, inserts 'native-open-in-app'
@@ -312,6 +317,22 @@ file open, so an idle GUI never pays for the editor. `lib/client.js` is
 hand-written module-table code with **no build step**; only the CM6 artifact is
 generated (when the version set changes).
 
+**Color scheme.** The editor is the one surface that cannot simply read the
+`--dsw-*` tokens: CodeMirror wants a palette of its own, and oneDark paints an
+opaque dark canvas no token can lighten. The surface therefore configures
+**oneDark only while the app is dark** and a transparent light layer otherwise,
+inside a CodeMirror `Compartment`, and it re-configures on the fly when the
+appearance flips. The text colour is `--dsw-alias-label-primary` in both modes,
+which is what keeps a document with **no syntax language** (`.ps1`,
+`.gitignore`, `.txt` — its colour comes from that token, not from a highlight
+style) readable; before alpha.5 it painted the light theme's near-black text on
+oneDark's dark canvas. Scheme truth order: the shipped
+`@deepseek-ai/dsh-client-ui-theme` snapshot (`active.colorScheme`, resolved
+lazily through `ctx.get('theme')` and followed via its `theme/change` event),
+else the `body[data-ds-dark-theme]` marker ui-layout writes (also observed, for
+a profile where ui-theme never lands), else `prefers-color-scheme`, else dark.
+The header control that switches the preference itself is §8.
+
 ## 7. The shared dialog surface (dsh-modal)
 
 Alpha.4 gave the editor a save-as dialog, and the same dialog is what any other
@@ -345,7 +366,55 @@ Design points worth keeping:
   reacts to the same key. Mask click and Cancel cancel; none of them fires while
   `submit` is in flight.
 
-## 8. The file-manager half of Open In (dsh-open-in-app)
+## 8. The Themes control (dsh-themes)
+
+The conversation header's right-hand group is a slot list
+(`conversation.session.header.utilities`): the shipped **Open In…** split button
+registers there at `order: -10` and the Session-log download at the default `0`.
+`dsh-themes` is one more occupant at **`order: -20`**, so it renders first —
+immediately left of Open In — and nothing shipped is patched or reordered.
+
+| Piece | Value |
+|---|---|
+| `id` | `dsh-themes` (the occupant's slot id) |
+| slot | `conversation.session.header.utilities` (list, session scope) |
+| `order` | `-20` — first in the group, left of Open In (-10) |
+| body | one icon button (28×28, 28px radius, 6px padding, 15px glyph — the header's own icon-button dress) opening a `Menu` of Light / Dark / System |
+| state | the shipped `theme` client service's snapshot, read through `ctx.get('theme')` |
+| write | `theme.setTheme(id)` — the same call the Settings → General → Appearance row makes |
+
+**Why a thin control and not a second theme system: the preference has one
+owner.** `@deepseek-ai/dsh-client-ui-theme` (row `ui-theme` in the web roster)
+persists the choice in the `ui-theme` settings namespace, resolves `system`
+through `prefers-color-scheme`, and publishes immutable snapshots; ui-layout's
+presenter applies each snapshot to the document
+(`body[data-ds-dark-theme]`, `color-scheme`, the `--dsw-*` overrides). A private
+copy of that preference would duplicate the persistence path and could drift
+from Settings, so this package reads and writes the same service instead.
+
+Design points worth keeping:
+
+- **The service is optional and resolved lazily.** `theme` is read with
+  `ctx.get('theme')` at use time and is NOT in the exported `inject` list — the
+  same rule `dsh-editor` follows for `modals`. A profile that never mounts
+  ui-theme keeps its header: the button renders disabled with "The theme service
+  is unavailable", and a write throws instead of silently doing nothing.
+- **Live state.** The control subscribes to ui-theme's `theme/change` event, so
+  a switch made in Settings (or an OS flip while the preference is `system`)
+  repaints the glyph; the store also reads a written value back after `setTheme`
+  so the control cannot lag a synchronous publish, and a microtask after boot
+  picks the snapshot up when ui-theme provides the service a tick late. It
+  observes no DOM: the resolved palette is ui-layout's business, not this
+  control's.
+- **The glyph follows the persisted preference**, not the resolved palette:
+  `System` stays visible as the choice it is, which is what the Settings cubes
+  highlight as well.
+- **Only seeded modules at runtime.** The bundle requires `react` and
+  `@deepseek-ai/dsh-client-ui-primitives` (`Menu`, `Tooltip` and the three
+  appearance glyphs), so it adds one entry to the boot graph and no new module
+  resolution.
+
+## 9. The file-manager half of Open In (dsh-open-in-app)
 
 The Session header's **"Open In…"** split button comes from the shipped
 `@deepseek-ai/dsh-client-ui-open-in-app` + `@deepseek-ai/dsh-host-open-in-app`
@@ -386,7 +455,7 @@ data in `sync-vendored.ps1`: a harness bump that moves the patched code fails th
 re-sync loudly instead of shipping a fork that silently lost its behavior, and
 the generated banner lists the applied patches.
 
-## 9. The installer
+## 10. The installer
 
 `scripts/install-all.ps1` / `uninstall-all.ps1` are **OS-neutral PowerShell**
 (ASCII only) and run on Windows PowerShell 5.1 and on PowerShell 7+ (`pwsh`)
@@ -436,7 +505,7 @@ rule.
   hard browser refresh is all it takes; the installer prints that instead of
   re-adding.
 - **Fork re-sync**: `scripts/sync-vendored.ps1` is the installer's sibling for
-  the three forked client bundles (§4, §8). It is *not* run by the installers -
+  the three forked client bundles (§4, §9). It is *not* run by the installers -
   moving a fork forward is a reviewed change, not an install step. Its candidate
   roots cover the profile, the Windows npm cache (`%LOCALAPPDATA%`/`%APPDATA%`),
   `~/.npm/_npx`, and the POSIX global module directories.
@@ -449,7 +518,7 @@ rule.
   `dsh-rightbar` also removes the disables, so the shipped rows come back on the
   next boot.
 
-## 10. Versioning and upgrade path
+## 11. Versioning and upgrade path
 
 - `.dsh-version.json` pins the dsh line, the `vendoredFrom` line the fork was
   taken from, and per-package versions.
@@ -461,12 +530,12 @@ rule.
   the keyed tab seats with their framework props (`useTabInfo`, `sessionId`,
   `useSessions`) - both of which this pack now owns, so a change there is a
   merge into the fork rather than a break - the patched `launch()` of the
-  open-in-app client bundle (§8, the re-sync fails loudly when it moves), and, on
+  open-in-app client bundle (§9, the re-sync fails loudly when it moves), and, on
   the Node side, the route registration surface (`connection.fetch.register`,
   where a route must declare `requestBody` or its handler never runs) and the
   session-root lookup.
 
-## 11. Troubleshooting quick table
+## 12. Troubleshooting quick table
 
 | Symptom | Cause / action |
 |---|---|
@@ -483,6 +552,9 @@ rule.
 | The "Open In…" File Explorer entry still does nothing | the forked row is not the one running: confirm the boot HTML lists `dsh-open-in-app/client.js` and not `@deepseek-ai/dsh-client-ui-open-in-app`, and that `dsh-open-in-app`'s layer still disables `ui-open-in-app` |
 | Editor tab says "Could not open the file" / `NO_WORKSPACE` | the session root could not be resolved (session not live and not persisted yet) or the path is outside the conversation folder; open the conversation once so its header is available |
 | Save answers "Changed on disk" | the file moved under you; use **Reload** (take the disk copy) or **Save anyway** (overwrite it) in the banner |
+| Code text is black-on-dark in the light theme | the editor did not follow the scheme: confirm the bundle is alpha.5+ (`dsh-editor` prints its version in the tab's file bar) and that ui-layout still writes `body[data-ds-dark-theme]` |
+| No Themes button in the header | `dsh-themes` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or the row did not land: check the console for `[dsh-themes]` |
+| The Themes button is greyed out | the `theme` service never appeared, so `@deepseek-ai/dsh-client-ui-theme` (row `ui-theme`) is not in the boot graph; the tooltip says "The theme service is unavailable" |
 | Fork drift after a harness update | `scripts/sync-vendored.ps1 -Check` exits 1; run it without `-Check` and review the diff |
 | Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; scripts auto-match - re-run installer |
 | `-Target desktop` is rejected | intentional: DSH Desktop is no longer a target of this pack |

@@ -17,16 +17,22 @@
       "vendors": ["@deepseek-ai/dsh-client-ui-sidebar-files"]
     },
     "dsh-editor": {
-      "version": "0.1.0-alpha.4",
+      "version": "0.1.0-alpha.5",
       "rows": ["editor"],
       "rowOverrides": [],
-      "uses": ["dsh-modal"]
+      "uses": ["dsh-modal", "@deepseek-ai/dsh-client-ui-theme"]
     },
     "dsh-modal": {
       "version": "0.1.0-alpha.1",
       "rows": ["modal"],
       "provides": ["modals"],
       "rowOverrides": []
+    },
+    "dsh-themes": {
+      "version": "0.1.0-alpha.1",
+      "rows": ["themes"],
+      "rowOverrides": [],
+      "uses": ["@deepseek-ai/dsh-client-ui-theme"]
     },
     "dsh-open-in-app": {
       "version": "0.1.0-alpha.1",

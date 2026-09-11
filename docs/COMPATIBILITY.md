@@ -40,6 +40,13 @@ The pack targets the harness line DeepSeek ships to the raw web install
   dialog uses. It owns no slot and no ordering edge, and the editor resolves it
   lazily (falling back to the browser's own prompt), so neither plugin requires
   the other to be installed.
+- **dsh-themes** adds the conversation header's Themes button. It contributes
+  one occupant to the shipped `conversation.session.header.utilities` list at
+  `order: -20` (left of Open In at `-10`) and drives the shipped
+  `@deepseek-ai/dsh-client-ui-theme` service (`getTheme` / `setTheme` / the
+  `theme/change` event, resolved lazily) - so the button and
+  Settings → General → Appearance are the same preference. The editor reads the
+  same service for its own light/dark CodeMirror palette.
 - The shipped `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` row stays
   enabled: it only consumes `sidebarRightTabs` and the keyed seat, so the
   Markdown/code/image/PDF previews keep working inside the pack's bar. The
@@ -79,6 +86,11 @@ The pack targets the harness line DeepSeek ships to the raw web install
 - **os-neutral alpha**: no version bumps - the launchers gained macOS/Linux
   twins (`install.sh` / `uninstall.sh`, `scripts/*.sh`) and the PowerShell
   scripts stopped assuming Windows; installed profiles are unaffected.
+- **editor alpha.5 / themes alpha.1**: the editor's CodeMirror palette follows
+  the app's light/dark appearance (oneDark only while the app is dark) and
+  re-themes live, and the new **dsh-themes** bundle adds the header button that
+  switches Light / Dark / System. New package, so the first install after this
+  change needs a plain `install.bat` / `./install.sh` run or `-Force`.
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the

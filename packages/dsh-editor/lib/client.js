@@ -50,6 +50,15 @@
  * plugin's own authenticated route on the first file open, so an idle GUI never
  * pays for the editor.
  *
+ * Color scheme (alpha.5): the surface follows the app's light/dark theme -
+ * oneDark while the app is dark, a transparent light theme while it is light -
+ * and re-configures live when the theme changes (the `theme` service's
+ * `theme/change` event, or the `body[data-ds-dark-theme]` marker ui-layout
+ * writes). The text colour is the `--dsw-alias-label-primary` token in both
+ * modes, so a file with no language of its own (a .ps1, .gitignore or .txt
+ * file) stays readable instead of painting light-theme text on oneDark's dark
+ * canvas.
+ *
  * Dirty state: the tab body compares the live document to the last saved text;
  * the SAVE button and the chip's dirty dot follow it. Ctrl/Cmd+S is bound inside
  * the editor. Unsaved changes are NOT auto-persisted - closing the tab while
@@ -85,9 +94,13 @@ window.__ModuleLoader__.load({
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the toolbar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.4'
+    const PLUGIN_VERSION = '0.1.0-alpha.5'
     /** The client service dsh-modal provides; resolved lazily, never required. */
     const MODAL_SERVICE = 'modals'
+    /** The client service @deepseek-ai/dsh-client-ui-theme provides; resolved lazily too. */
+    const THEME_SERVICE = 'theme'
+    /** The theme presenter's dark-palette marker on <body> (ui-layout). */
+    const DARK_ATTRIBUTE = 'data-ds-dark-theme'
 
     // ---------------------------------------------------------------------
     // Styles
@@ -323,6 +336,113 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
+    // Color scheme (light / dark), shared by every editor surface.
+    //
+    // The editor is the one surface that cannot just read the `--dsw-alias-*`
+    // tokens: CodeMirror needs a light/dark theme of its own, and oneDark paints
+    // an opaque dark canvas that no token can lighten. So the surface gets
+    // oneDark only while the APP is dark, and a transparent light layer
+    // otherwise. Without that split, a document CodeMirror assigns no language
+    // (a .ps1, .gitignore or .txt file - its text colour comes from the token
+    // below, not from a syntax style) painted light-theme text
+    // (`--dsw-alias-label-primary` is near-black there) on oneDark's dark
+    // canvas.
+    //
+    // Truth order for "is the app dark": the theme service's resolved snapshot
+    // (`active.colorScheme`), else the presenter's own body marker
+    // (`body[data-ds-dark-theme]`, written before the first paint), else the OS
+    // preference. Live flips reach every open editor through the service's
+    // `theme/change` event, with a body-marker observer as the fallback for a
+    // profile where ui-theme never lands.
+    // ---------------------------------------------------------------------
+    /** The owning client context, remembered so the theme service can be re-resolved. */
+    let pluginCtx = null
+    /** The theme service once it answered; a miss is retried on the next probe. */
+    let themeService = null
+    /** The resolved scheme every editor surface is on. */
+    let appDark = probeDark()
+    const schemeListeners = new Set()
+
+    /** The theme service (@deepseek-ai/dsh-client-ui-theme), or `null`. */
+    function themeServiceNow() {
+      if (themeService) return themeService
+      try {
+        themeService = pluginCtx && pluginCtx.get ? pluginCtx.get(THEME_SERVICE) : null
+      } catch (e) {
+        themeService = null
+      }
+      return themeService
+    }
+
+    /** Whether the app is currently dark, from the service, the body marker, or the OS. */
+    function probeDark() {
+      try {
+        const service = themeServiceNow()
+        const snapshot = service && typeof service.getTheme === 'function' ? service.getTheme() : null
+        const scheme = snapshot && snapshot.active ? snapshot.active.colorScheme : null
+        if (scheme === 'dark') return true
+        if (scheme === 'light') return false
+      } catch (e) {}
+      try {
+        const body = document.body
+        if (body && typeof body.hasAttribute === 'function' && body.hasAttribute(DARK_ATTRIBUTE)) return true
+      } catch (e) {}
+      try {
+        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+          return window.matchMedia('(prefers-color-scheme: dark)').matches
+        }
+      } catch (e) {}
+      // oneDark was the editor's own default before it followed the app.
+      return true
+    }
+
+    /** Re-probe the scheme and tell every live surface when it moved. */
+    function refreshScheme() {
+      const next = probeDark()
+      if (next === appDark) return
+      appDark = next
+      for (const listener of [...schemeListeners]) {
+        try {
+          listener(appDark)
+        } catch (e) {
+          /* a throwing subscriber must not break the others */
+        }
+      }
+    }
+
+    /** Follow the app's scheme: the listener is called with the new `dark` flag. */
+    function subscribeScheme(listener) {
+      schemeListeners.add(listener)
+      return () => {
+        schemeListeners.delete(listener)
+      }
+    }
+
+    /**
+     * The CodeMirror theme layer for one color scheme: oneDark while the app is
+     * dark (the editor's long-standing look), else a light layer that keeps the
+     * editor on the panel's own tokens - CodeMirror's base theme already brings
+     * the light caret, cursor and selection styling.
+     * @param CM - the vendored engine.
+     * @param dark - whether the app is dark.
+     * @returns the extension(s) a compartment holds.
+     */
+    function schemeExtensions(CM, dark) {
+      if (dark) return CM.oneDark
+      return [
+        CM.EditorView.theme(
+          {
+            '&': { backgroundColor: 'transparent' },
+            '.cm-content': { caretColor: 'var(--dsw-alias-state-accent,#4f8cff)' },
+            '.cm-gutters': { color: 'var(--dsw-alias-label-tertiary,#8a8a8a)' },
+            '.cm-activeLine': { backgroundColor: 'var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))' },
+          },
+          { dark: false },
+        ),
+      ]
+    }
+
+    // ---------------------------------------------------------------------
     // Vendored CodeMirror 6 engine (lazy, once).
     // ---------------------------------------------------------------------
     let cmEnginePromise = null
@@ -527,6 +647,7 @@ window.__ModuleLoader__.load({
       let cm = null
       let langCompartment = null
       let wrapCompartment = null
+      let themeCompartment = null
       let file = null // { sessionId, path, mtimeMs, size }; null = a blank, unnamed document
       let blank = false // the surface currently holds the tab's own new document
       let targetKey = null // sessionId + path of the loaded/loading file
@@ -770,6 +891,7 @@ window.__ModuleLoader__.load({
         if (cm) return cm
         langCompartment = new CM.Compartment()
         wrapCompartment = new CM.Compartment()
+        themeCompartment = new CM.Compartment()
         const extensions = [
           CM.lineNumbers(),
           CM.highlightActiveLineGutter(),
@@ -812,11 +934,13 @@ window.__ModuleLoader__.load({
           langCompartment.of([]),
           wrapCompartment.of([CM.EditorView.lineWrapping]),
         ]
-        // The editor ALWAYS renders on the dark oneDark palette (owner's
-        // choice): the Sidebar's panel uses the dark design tokens, and oneDark
-        // keeps text and syntax colours readable on that background no matter
-        // what the OS or app scheme reports - so no prefers-color-scheme probe.
-        extensions.push(CM.oneDark)
+        // The palette follows the APP's color scheme (see the color-scheme
+        // section): oneDark paints its own opaque dark canvas, so it is only
+        // configured while the app is dark. The transparent light layer leaves
+        // the panel's tokens visible, and the `.cm-scroller` colour below is a
+        // token in both modes, which is what keeps unhighlighted text readable
+        // in either one.
+        extensions.push(themeCompartment.of(schemeExtensions(CM, appDark)))
         extensions.push(
           CM.EditorView.theme({
             '&': { height: '100%', fontSize: '12.5px' },
@@ -1007,6 +1131,14 @@ window.__ModuleLoader__.load({
       showState('loading', 'Opening\u2026', '')
       updateDirtyUi()
 
+      // Follow the app's color scheme while this surface is open. A flip that
+      // lands before the engine loaded needs no dispatch: the compartment is
+      // created from the then-current `appDark`.
+      const stopScheme = subscribeScheme(() => {
+        if (!cm || !themeCompartment) return
+        cm.dispatch({ effects: themeCompartment.reconfigure(schemeExtensions(CM, appDark)) })
+      })
+
       return {
         /** Show one file, or the tab's own blank document when `target` is null. */
         open(target) {
@@ -1014,6 +1146,7 @@ window.__ModuleLoader__.load({
         },
         dispose() {
           disposed = true
+          stopScheme()
           if (statusTimer) clearTimeout(statusTimer)
           if (cm) {
             try {
@@ -1284,6 +1417,7 @@ window.__ModuleLoader__.load({
     const inject = ['slots', 'sidebarRightTabs']
 
     function apply(ctx) {
+      pluginCtx = ctx
       /**
        * The shared dialog service (dsh-modal), re-resolved on every use instead
        * of held: it is a service that mounts when its own row lands, and the
@@ -1297,6 +1431,41 @@ window.__ModuleLoader__.load({
           return undefined
         }
       }
+
+      // Follow the app's color scheme. The theme service's own change event is
+      // authoritative once ui-theme is mounted; the body marker (written by
+      // ui-layout before the first paint) is both the boot-time answer and the
+      // fallback when ui-theme never lands.
+      try {
+        themeService = ctx.get ? ctx.get(THEME_SERVICE) : null
+      } catch (e) {
+        themeService = null
+      }
+      refreshScheme()
+      try {
+        if (typeof ctx.on === 'function') ctx.on('theme/change', refreshScheme)
+      } catch (e) {}
+      try {
+        const body = typeof document !== 'undefined' ? document.body : null
+        if (body && typeof MutationObserver === 'function') {
+          const observer = new MutationObserver(() => {
+            refreshScheme()
+          })
+          observer.observe(body, { attributes: true, attributeFilter: [DARK_ATTRIBUTE] })
+          ctx.effect(
+            () => () => {
+              observer.disconnect()
+            },
+            'dsh-editor: color scheme observer',
+          )
+        }
+      } catch (e) {}
+      // The service may land a tick after this row (both are boot plugins): the
+      // microtask picks up the resolved scheme once every apply has run.
+      Promise.resolve().then(() => {
+        themeService = null
+        refreshScheme()
+      })
 
       try {
         ctx.effect(() => ctx.sidebarRightTabs.register(editorDefinition()), 'dsh-editor: editor tab type')

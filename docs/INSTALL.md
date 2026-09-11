@@ -112,3 +112,11 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 - **Editor says "Could not open the file" / keeps saving as changed on disk** —
   the session workspace root could not be resolved (open the conversation once),
   or the file changed under you: use **Reload** / **Save anyway** in the banner.
+- **No Themes button in the header (or it is greyed out)** — the button sits
+  immediately left of **Open In…**; a new package needs one install run
+  (`install.bat` / `./install.sh`, or `-Force`), then a restart. Greyed out means
+  the shipped `@deepseek-ai/dsh-client-ui-theme` service (row `ui-theme`) is not
+  in the boot graph — the tooltip says "The theme service is unavailable".
+- **Code text looks black-on-dark in the light theme** — the editor follows the
+  app's appearance; confirm the served `dsh-editor` bundle prints alpha.5 or
+  later in a tab's file bar and hard-refresh (Ctrl+F5).

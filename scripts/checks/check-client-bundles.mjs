@@ -120,7 +120,18 @@ function loadBundle(relative, extraRequire) {
     }
     if (name === '@deepseek-ai/dsh-client-ui-primitives') {
       const Null = () => null
-      return { Menu: Null, Tooltip: Null, IconChevronDownOutline14: Null }
+      // Menu renders its anchor (the trigger); Tooltip renders its child. Both
+      // are enough for a static render to reach the markup a bundle builds.
+      const Anchor = (props) => (props && props.anchor !== undefined ? props.anchor : null)
+      const Child = (props) => (props && props.children !== undefined ? props.children : null)
+      return {
+        Menu: Anchor,
+        Tooltip: Child,
+        IconChevronDownOutline14: Null,
+        IconLightOutline16: Null,
+        IconDarkOutline16: Null,
+        IconFollowsystemOutline16: Null,
+      }
     }
     throw new Error('unexpected require in a client bundle: ' + name)
   }
@@ -272,6 +283,104 @@ check(
   '/open-in-app/open,/api/dsh-open-in-app/open,/open-in-app/open',
 )
 check('launch bodies unchanged', calls[1].body, '{"app":"explorer","path":"C:/work"}')
+
+// --------------------------------------------------------------- dsh-themes
+const themes = loadBundle('packages/dsh-themes/lib/client.js', {})
+check('themes bundle id', themes.id, 'dsh-themes')
+check('themes inject', JSON.stringify(themes.exports.inject), '["slots","locale"]')
+let themeSnapshot = { preference: 'dark', active: { id: 'dark', colorScheme: 'dark' }, revision: 3 }
+const themeWrites = []
+const themeService = {
+  getTheme: () => themeSnapshot,
+  setTheme(id) {
+    themeWrites.push(id)
+    themeSnapshot = { preference: id, active: { id: 'system', colorScheme: 'light' }, revision: themeSnapshot.revision + 1 }
+  },
+}
+const themeEvents = []
+const themesSeats = {}
+const themeLocales = {}
+themes.exports.apply({
+  get: (name) => (name === 'theme' ? themeService : undefined),
+  on: (event, listener) => {
+    if (event === 'theme/change') themeEvents.push(listener)
+    return () => {}
+  },
+  slots: {
+    inject: (name, fn) => fn(),
+    register(spec, component) {
+      themesSeats[spec.name] = { spec, component }
+      return () => {}
+    },
+  },
+  locale: {
+    register(namespace, dictionaries) {
+      themeLocales[namespace] = dictionaries
+      return () => {}
+    },
+  },
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+check('themes header seat', Object.keys(themesSeats).join(','), 'conversation.session.header.utilities')
+const themesSpec = themesSeats['conversation.session.header.utilities'].spec
+check('themes seat id', themesSpec.id, 'dsh-themes')
+check('themes sits left of Open In', themesSpec.order < -10, true)
+check('themes dictionaries', Object.keys(themeLocales).join(','), 'themes')
+const themesFacade = themesSpec.inject()
+check('themes state is a snapshot source', typeof themesFacade.themeState.getSnapshot, 'function')
+check('themes reads the service snapshot', themesFacade.themeState.getSnapshot().preference, 'dark')
+const themesCopy = {
+  'theme.light': 'Light',
+  'theme.dark': 'Dark',
+  'theme.system': 'System',
+  'theme.current': 'Theme: {name}',
+  'theme.unavailable': 'The theme service is unavailable',
+}
+const themesT = (key, vars) => {
+  const text = themesCopy[key] === undefined ? key : themesCopy[key]
+  return vars ? text.replace(/\{(\w+)\}/g, (match, name) => String(vars[name] === undefined ? '' : vars[name])) : text
+}
+const ThemesAction = themesSeats['conversation.session.header.utilities'].component
+const themesMarkup = renderToStaticMarkup(h(ThemesAction, { t: themesT, themeState: themesFacade.themeState }))
+// The server snapshot is the product default (`system`); the live snapshot the
+// button paints in the browser is the service's own ('dark' above).
+check('themes button renders', themesMarkup.includes('class="dst-button"') && themesMarkup.includes('aria-haspopup="menu"'))
+check('themes button is not disabled', themesMarkup.includes('disabled'), false)
+themesFacade.themeState.setTheme('light')
+check('themes writes through the service', themeWrites.join(','), 'light')
+check('themes adopts the written value', themesFacade.themeState.getSnapshot().preference, 'light')
+for (const listener of themeEvents) listener({ preference: 'system', active: { id: 'system', colorScheme: 'dark' }, revision: 9 })
+check('themes follows theme/change', themesFacade.themeState.getSnapshot().preference, 'system')
+
+// A profile that never mounts ui-theme: the control still renders (disabled,
+// with its own copy) instead of taking the header down.
+const bareSeats = {}
+themes.exports.apply({
+  get: () => undefined,
+  on: () => () => {},
+  slots: {
+    inject: (name, fn) => fn(),
+    register(spec, component) {
+      bareSeats[spec.name] = { spec, component }
+      return () => {}
+    },
+  },
+  locale: { register: () => () => {} },
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+const bareState = bareSeats['conversation.session.header.utilities'].spec.inject().themeState
+const bareMarkup = renderToStaticMarkup(h(bareSeats['conversation.session.header.utilities'].component, { t: themesT, themeState: bareState }))
+check('themes survives a missing service', bareMarkup.includes('disabled') && bareMarkup.includes('aria-haspopup="menu"'))
+check('themes reports the missing service', bareMarkup.includes('The theme service is unavailable'))
+let refused = false
+try {
+  bareState.setTheme('dark')
+} catch (err) {
+  refused = true
+}
+check('themes refuses to write without the service', refused)
 
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')

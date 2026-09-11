@@ -1,0 +1,29 @@
+{
+  "name": "dsh-themes",
+  "version": "0.1.0-alpha.1",
+  "description": "Themes: a small control in the dsh-vn-plugins Web GUI's conversation header that switches the app between the light, dark and system appearance - the same preference Settings > General > Appearance owns - and shows which one is active. Alpha.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "license": "MIT"
+}

@@ -1,4 +1,4 @@
-# dsh-editor (alpha.4)
+# dsh-editor (alpha.5)
 
 **Editor** is a **tab type for the pack's right bar** (`dsh-rightbar` — the
 right-hand column of the DeepSeek Harness web GUI, beside the **Start** page and
@@ -9,8 +9,23 @@ creates new files through the shared **`dsh-modal`** dialog, and saves them back
 to disk. It is a **sub-plugin**: it holds no bar code, and its host-side half
 owns the pack's own HTTP routes. Alpha.
 
-## What alpha.4 does
+## What alpha.5 does
 
+- **The editor follows the app's appearance** (light **or** dark). CodeMirror
+  needs a palette of its own, so the surface configures **oneDark only while the
+  app is dark** and a transparent light theme while it is light — the light layer
+  leaves the panel's `--dsw-*` tokens visible instead of painting a white canvas
+  of its own. The document text colour is the `--dsw-alias-label-primary` token
+  in both modes, which is what keeps a file with **no syntax language**
+  (`.ps1`, `.gitignore`, `.txt`, …) readable: in the light theme that token is
+  near-black, so on oneDark's opaque dark canvas it used to paint black text on a
+  dark background.
+- **The switch is live.** The surface re-configures the moment the appearance
+  changes, in either direction, without reopening the file: the `theme` service
+  (shipped `@deepseek-ai/dsh-client-ui-theme`) emits `theme/change`, and the
+  `body[data-ds-dark-theme]` marker ui-layout writes is watched as the fallback
+  for a profile that never mounts ui-theme. Both are resolved lazily — the editor
+  never hard-depends on the theme package.
 - **Registered into the right bar** through the bar's tab-type registry
   (`ctx.sidebarRightTabs.register`, provided by `dsh-rightbar`): id
   `dsh-editor`, kind `editor`, with the body and the chip title registered in
@@ -50,8 +65,9 @@ owns the pack's own HTTP routes. Alpha.
 - **Edit**: CodeMirror 6 with line numbers, history/undo, bracket matching,
   autocomplete, find-in-file, and syntax highlighting for js/ts/jsx/tsx, json,
   markdown, python, html, css, yaml. Line-wrapping for prose-ish files. The
-  editor always renders on the dark oneDark palette (the Sidebar's panel uses
-  the dark design tokens). The engine is **lazy**: the vendored classic bundle is
+  palette follows the **app's own light/dark theme** (oneDark while the app is
+  dark, a token-driven transparent theme while it is light; see alpha.5 above).
+  The engine is **lazy**: the vendored classic bundle is
   fetched once from `/api/dsh-editor/vendor` the first time a file opens.
 - **Toolbar**: a find-in-file search input and a **Save** button. Save is offered
   for an unnamed document at all times and for an open file while it is modified;
@@ -107,6 +123,13 @@ falls back to `window.prompt` when it is absent, so the editor never depends on
 that package being installed. `dsh-modal` is not listed in this package's
 `dsh.client.inject` on purpose — the dependency is a service lookup, not a module
 load order.
+
+The theme service is resolved the same way (`ctx.get('theme')`, from the shipped
+`@deepseek-ai/dsh-client-ui-theme`): with it the editor reads the resolved
+`active.colorScheme`, and without it it falls back to the `body[data-ds-dark-theme]`
+marker ui-layout writes and then to `prefers-color-scheme` — so the editor keeps
+following the app on every profile. The header control that switches that
+preference is [`packages/dsh-themes`](../dsh-themes).
 
 ### Regenerating the vendored CodeMirror bundle
 

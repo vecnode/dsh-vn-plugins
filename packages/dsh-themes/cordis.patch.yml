@@ -1,0 +1,12 @@
+# dsh-themes bundle layer (alpha).
+#
+# One extra row owns the header's Themes control: the browser half registers a
+# small button into the Session header's utilities list - immediately left of
+# the shipped Open In control - and drives the theme service
+# (@deepseek-ai/dsh-client-ui-theme) the Settings > General > Appearance row
+# also writes. Nothing shipped is patched: the preference, its persistence and
+# the token stylesheets stay owned by ui-theme, and this row only adds one slot
+# occupant on top.
+- insert:
+    - id: themes
+      name: 'dsh-themes'
