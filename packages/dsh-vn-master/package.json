@@ -1,0 +1,21 @@
+{
+  "name": "dsh-vn-master",
+  "version": "0.1.0-alpha.1",
+  "description": "Master: the pack's deliberately BLANK base bundle for the DeepSeek Harness web GUI - one no-op 'master' host row and the bundle layer, installed last so it is the pack's final word on any row. It ships no browser half, provides no service and declares no inject edge, so the right bar's tab-type chain stays exactly where it is. Alpha.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT"
+}

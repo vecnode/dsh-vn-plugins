@@ -1,0 +1,24 @@
+# dsh-vn-master bundle layer (alpha).
+#
+# The master is deliberately BLANK, and that is the whole design. This layer
+# adds one no-op row and nothing else: no browser half (`dsh.client`), no client
+# service, no `inject` edge, no node in the boot graph. The right bar keeps the
+# `sidebarRightTabs` / `sidebarRight` services other tab types resolve - they
+# live in the GENERATED fork dsh-rightbar/lib/client.js - so introducing the
+# master cannot disturb the tab-type chain. The core-row disables also stay with
+# the packages that replace those rows (dsh-rightbar disables ui-sidebar-right /
+# ui-sidebar-files), so a partial `-Plugin` install still mounts one bar.
+#
+# What it is for:
+#   - pack-wide patches (row restatements, extra disables, ordering) belong
+#     here, so the right bar stops carrying responsibilities that are not the
+#     bar's;
+#   - it is installed LAST. `dsh-vn-master` sorts after every other package in
+#     this repo, and `dsh plugin add` appends a new bundle, so this is the final
+#     layer of the profile stack - and a later layer wins per row.
+#
+# The `master` row is a no-op on purpose: it marks the master as mounted and
+# gives future work a row to restate instead of inventing a new one.
+- insert:
+    - id: master
+      name: 'dsh-vn-master'

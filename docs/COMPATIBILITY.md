@@ -11,11 +11,18 @@ The pack targets the harness line DeepSeek ships to the raw web install
 | Forked from | the same `0.1.5-rc.1` line (`.dsh-version.json`'s `vendoredFrom`) |
 | Install target | the web profile only (`$DSH_HOME/profiles/web`) |
 | Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell + Node.js and npm/npx - no PowerShell); the plugins themselves are plain JS and the only OS-specific code is the file-browser launcher |
+| Master | **`dsh-vn-master`**, deliberately blank - the bundle layer plus one no-op `master` row; no client half, no service, no inject edge and no core-row disables |
 | Right bar | **owned by the pack** - `dsh-rightbar` / `dsh-rightbar-files` are forks of `@deepseek-ai/dsh-client-ui-sidebar-right` / `-sidebar-files`, and the core rows `ui-sidebar-right` / `ui-sidebar-files` are disabled |
 | Open In file managers | **owned by the pack** - `dsh-open-in-app` forks `@deepseek-ai/dsh-client-ui-open-in-app` (row `ui-open-in-app` disabled) and launches the OS file browser directly |
 
 ## What this means for the plugin
 
+- **dsh-vn-master** is the pack's master and is **deliberately blank**: one no-op
+  `master` row plus the bundle layer, no `dsh.client`, no service, no `inject`
+  edge and no core-row disables. It is installed last (its name sorts last and
+  `dsh plugin add` appends), so it is the profile's final layer - the slot for
+  pack-wide patches. Because it publishes and consumes nothing, it cannot enter
+  or disturb the right bar's tab-type chain.
 - **dsh-rightbar** provides the right bar (chrome, docking panel, expand button,
   Start page) and the `sidebarRightTabs` / `sidebarRight` services its tab types
   use; **dsh-rightbar-files** provides the Files tab on top of it.
@@ -80,7 +87,7 @@ The pack targets the harness line DeepSeek ships to the raw web install
 - **rightbar alpha.1**: the pack now **owns the bar**. `dsh-rightbar` and
   `dsh-rightbar-files` are byte-for-byte forks of the shipped
   `@deepseek-ai/dsh-client-ui-sidebar-right` / `-sidebar-files` bundles, and the
-  master's bundle layer hard-disables the two core rows so only the pack's
+  bar's bundle layer hard-disables the two core rows so only the pack's
   copies run. Re-sync the fork with `scripts/sync-vendored.ps1` after a
   harness-line bump (see `ARCHITECTURE.md` §4).
 - **editor alpha.4 / modal alpha.1 / open-in-app alpha.1**: the editor starts
@@ -111,6 +118,19 @@ The pack targets the harness line DeepSeek ships to the raw web install
   wrappers around PowerShell, so macOS/Linux hosts no longer need PowerShell at
   all; the `.ps1` half stays the Windows path (`install.bat`), and
   `scripts/sync-vendored.ps1` remains PowerShell-only maintainer tooling.
+
+- **master alpha.1 (new package)**: the pack gained a master bundle of its own,
+  **`dsh-vn-master`**, and it is deliberately **blank** - the bundle layer plus
+  one no-op `master` host row, with no `dsh.client`, no published service, no
+  `inject` edge and no core-row disables. The right bar therefore stops being the
+  pack's base and keeps only bar responsibilities; pack-wide patches now belong
+  to the master, whose layer is installed last (its name sorts last and
+  `dsh plugin add` appends) and is consequently the profile's final word per row.
+  Nothing about the bar's tab-type chain changes: `sidebarRightTabs` /
+  `sidebarRight` stay in the generated fork, and the `ui-sidebar-right` /
+  `ui-sidebar-files` disables stay in `dsh-rightbar`, next to the rows they
+  replace. New package, so the first install after this change needs a plain
+  `install.bat` / `./install.sh` run or `-Force`.
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the

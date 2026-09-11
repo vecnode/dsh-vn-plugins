@@ -47,10 +47,15 @@ A **bundle** is an npm package whose `package.json` declares:
   `dsh.profile.bundles` (order matters: later layers win per row).
 
 A UI plugin therefore has **two halves in one package** - and the pack has one
-master (the bar) plus sub-plugins that live in it:
+master (a blank base layer, `dsh-vn-master`) plus the bar and the sub-plugins
+that live in it:
 
 ```
-packages/dsh-rightbar/            # the master: the pack's own right bar
+packages/dsh-vn-master/           # the master: the bundle layer alone, no client half
+  package.json        # dsh.bundle ONLY (no dsh.client): a layer, and nothing else
+  cordis.patch.yml    # inserts the no-op 'master' row; no disables, no overrides
+  lib/index.js        # Node half: no-op row (the master is browser-free)
+packages/dsh-rightbar/            # the bar: the pack's own right bar
   package.json        # dsh.bundle + dsh.client
   cordis.patch.yml    # disables ui-sidebar-right / ui-sidebar-files, inserts 'rightbar'
   lib/index.js        # Node half: no-op row (the bar is browser-only)
@@ -79,6 +84,18 @@ packages/dsh-open-in-app/         # the file-manager half of the Open In button
   lib/index.js        # Node half: POST /api/dsh-open-in-app/open (node builtins only)
   lib/client.js       # GENERATED + PATCHED fork of the shipped open-in-app client
 ```
+
+**The master is a separate, blank bundle.** `dsh-vn-master` carries the pack's
+bundle layer and nothing else: no `dsh.client` (so it contributes no node to the
+boot graph), no service, no `inject` edge and no core-row disables. That is what
+makes it safe to own pack-wide patches. The `sidebarRightTabs` / `sidebarRight`
+services stay in the generated fork of the bar, so introducing the master cannot
+touch the tab-type chain. It is also installed **last** - its name is the only one
+here that sorts after every other, and `dsh plugin add` appends a new bundle -
+which makes its layer the profile's final word per row. The core-row disables
+deliberately stay with the packages that replace those rows: a disable belongs
+next to the insertion that supersedes it, so `-Plugin dsh-rightbar` on its own
+still mounts exactly one bar.
 
 > History: the pack shipped its own right-hand panel as `dsh-focus` (row
 > `focus`) through alpha.9, then as `dsh-files` (row `files`) from alpha.10,
@@ -150,7 +167,7 @@ per registered tab type - and the **Files** tab with the session workspace tree.
 **That bar is this pack's.** `dsh-rightbar` ships a byte-for-byte fork of the
 shipped `@deepseek-ai/dsh-client-ui-sidebar-right` bundle (module-table id
 rewritten to `dsh-rightbar`), and `dsh-rightbar-files` does the same for
-`@deepseek-ai/dsh-client-ui-sidebar-files`. The master's bundle layer then
+`@deepseek-ai/dsh-client-ui-sidebar-files`. The bar's bundle layer then
 hard-disables the two core rows:
 
 ```yaml
@@ -559,8 +576,9 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
   `effective_version()` in shell). A plain `install.bat` / `./install.sh` after a
   version bump therefore re-adds the bundle, so development changes actually
   reach the profile.
-- **Live links**: the web profile installs every bundle (`dsh-rightbar`,
-  `dsh-rightbar-files`, `dsh-editor`, `dsh-modal`, `dsh-themes`,
+- **Live links**: the web profile installs every bundle (`dsh-vn-master` — the
+  blank master, so a profile that lists it still gets no client half — plus
+  `dsh-rightbar`, `dsh-rightbar-files`, `dsh-editor`, `dsh-modal`, `dsh-themes`,
   `dsh-open-in-app`) as `pnpm link:` symlinks straight into this repo (detected by
   `Test-LiveLink` / `is_live_link()`, comparing realpaths case-insensitively on
   Windows). Code edits then already apply - a restart of
@@ -603,6 +621,7 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
 |---|---|
 | Old panel still showing after edit | client bundle is read at boot; restart the app and HARD-refresh the browser (Ctrl+F5). The web profile is a live link, so no reinstall is needed |
 | The right bar is missing entirely | the fork did not load: confirm the boot HTML lists `dsh-rightbar/client.js`, and that `dsh-rightbar`'s layer still disables `ui-sidebar-right` / `ui-sidebar-files` (a profile patch that re-enables them mounts two bars, which throws on the duplicate tab-type ids) |
+| The master is in the profile but serves no bundle | expected: `dsh-vn-master` is the blank master. With no `dsh.client` it must NOT appear in the boot HTML; only its no-op `master` row joins the host tree |
 | The bar is the shipped one, not the pack's | `dsh-rightbar` is not in `dsh.profile.bundles` (or the row id was renamed); re-run the installer (`install.bat` / `./install.sh`), then restart |
 | Two Files panels / a stray dock after upgrading | the retired `dsh-files` (or `dsh-focus`) bundle is still in the profile; re-run the installer (its prune removes both) |
 | No "Editor" in the "+" / Start page | the client bundle did not activate: check the browser console for `[dsh-editor]`; a `sidebarRightTabs` service that never appears leaves activation pending |
