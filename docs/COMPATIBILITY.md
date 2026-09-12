@@ -53,6 +53,31 @@ The pack targets the harness line DeepSeek ships to the raw web install
   which the editor or a shipped preview then claims. It replaces nothing and
   publishes no service, so it cannot disturb the bar’s tab-type chain.
   **git must be on `PATH`** for its routes to answer.
+- **dsh-terminal** adds a **real shell in a bottom dock**: a header control at
+  `order: 30` in the same `conversation.session.header.utilities` list (the last
+  utility, right of Open In at `-10`) toggles a horizontal panel that starts at
+  the left bar's right edge, spans the page and sits **under** the middle and
+  right columns, which make room for it. Inside is vendored **xterm.js** attached
+  over an authenticated WebSocket to a real **PTY** - ConPTY PowerShell on
+  Windows, the login shell on macOS/Linux - so prompts, colors, `Ctrl+C` and
+  resizes all behave. It replaces nothing and publishes no service (it does not
+  use the header corner, which the right bar's toggle owns), forks nothing and
+  disables no core row.
+  - The PTY is the **harness installation's own `node-pty`**, resolved (never
+    installed) from `process.argv[1]`, `$DSH_HOME/profiles` or the package's own
+    directory; a host where it cannot be resolved reports
+    `available:false` on `/api/dsh-terminal/health` and the dock says so - the
+    rest of the pack is unaffected.
+  - **A terminal is an unsandboxed shell.** It does not pass through the
+    file-policy sandbox the model's tools obey; the gate is the connection's own
+    authentication, checked before the socket reaches the PTY.
+  - Clipboard is `Ctrl+Shift+C` / `Ctrl+Shift+V` (`Cmd` on macOS), because a bare
+    `Ctrl+C` has to stay SIGINT.
+  - Detaching (a page reload, or closing the dock) keeps the shell for five
+    minutes so a reattach replays the retained scrollback; after that it is
+    reaped. Sessions do not survive a harness restart.
+  - **New package**, so the first install after this change needs a plain
+    `install.bat` / `./install.sh` run or `-Force`.
 - **dsh-modal** provides the shared `modals` client service the editor's save-as
   dialog uses. It owns no slot and no ordering edge, and the editor resolves it
   lazily (falling back to the browser's own prompt), so neither plugin requires
@@ -180,6 +205,26 @@ The pack targets the harness line DeepSeek ships to the raw web install
   because it shows commits rather than a file tree. The label is all that changed: the
   package, the row, the kind and the address keep the `dsh-gittree` / `gittree` name, so
   an installed profile needs no re-add - only a restart and a hard refresh.
+
+- **terminal alpha.1 (new package)**: the pack gained **`dsh-terminal`**, a real
+  shell in a **bottom dock**. A header button (order 30 in the header utilities
+  list, right of Open In...) opens a panel that starts at the left bar's right
+  edge, spans the page and sits under the middle and right columns, which make
+  room for it: the frame's inline height becomes `calc(100% - <dock>px)` while it
+  is open and is restored exactly on close, and the left edge comes from the
+  frame's resolved grid tracks, so it follows the left bar opening, collapsing
+  and being dragged. **xterm.js 5.5.0** (+ `@xterm/addon-fit` 0.10.0) is vendored
+  into `lib/vendor/` from `vendor/` the same way the editor vendors CodeMirror,
+  and the Node half owns `/api/dsh-terminal/health`, `/api/dsh-terminal/vendor/*`
+  and one authenticated WebSocket upgrade, `/api/dsh-terminal/pty`. The PTY is
+  the **harness's own `node-pty`** - resolved, never installed - with
+  ConPTY PowerShell on Windows and the login shell on macOS/Linux; one shell per
+  (conversation, slot), up to eight, kept five minutes after its last socket so a
+  reload reattaches with a scrollback replay. Nothing is forked and no core row
+  is disabled. A terminal is, by nature, an **unsandboxed shell**: the gate is the
+  connection's own authentication, checked before the socket reaches a PTY. New
+  package, so the first install after this change needs a plain
+  `install.bat` / `./install.sh` run or `-Force`.
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the

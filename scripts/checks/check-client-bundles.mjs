@@ -611,6 +611,51 @@ check(
   '<span class="dsg-title">History</span>',
 )
 
+// -------------------------------------------------------------- dsh-terminal
+const terminal = loadBundle('packages/dsh-terminal/lib/client.js', {})
+const termCssTag = terminal.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-terminal/terminal.css').pop()
+const termCss = termCssTag ? termCssTag.textContent : ''
+check('terminal bundle id', terminal.id, 'dsh-terminal')
+check('terminal inject', JSON.stringify(terminal.exports.inject), '["slots"]')
+check(
+  'terminal stylesheet injected',
+  termCss.includes('.dst-dock{position:fixed;') &&
+    termCss.includes('.dst-dock[data-open]:not([data-suspended]){display:flex}') &&
+    termCss.includes('.dst-grip{'),
+)
+const termSeats = {}
+terminal.exports.apply({
+  slots: {
+    inject: (name, fn) => fn(),
+    register(spec, component) {
+      termSeats[spec.name] = { spec, component }
+      return () => {}
+    },
+  },
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+check(
+  'terminal seats',
+  Object.keys(termSeats).sort().join(','),
+  'conversation.session.header.utilities,shell.overlay',
+)
+check('terminal button id', termSeats['conversation.session.header.utilities'].spec.id, 'dsh-terminal')
+// Right of Open In... (-10) and left of the right bar's own toggle in the corner.
+check('terminal button order', termSeats['conversation.session.header.utilities'].spec.order, 30)
+check('terminal dock rides the overlay list', termSeats['shell.overlay'].spec.id, 'dsh-terminal')
+const termButtonMarkup = renderToStaticMarkup(h(termSeats['conversation.session.header.utilities'].component, { sessionId: 's1' }))
+check('terminal button renders', termButtonMarkup.includes('data-dsh-terminal-toggle') && termButtonMarkup.includes('aria-label="Terminal"'))
+check('terminal button reports its state', termButtonMarkup.includes('aria-pressed="false"'))
+// The dock is always mounted (so its effects own the geometry); `data-open` is
+// the intent flag and must be absent while it is closed.
+const termDockMarkup = renderToStaticMarkup(h(termSeats['shell.overlay'].component, {}))
+check('terminal dock renders closed', termDockMarkup.includes('data-dsh-terminal-dock') && termDockMarkup.includes('role="region"'))
+check('terminal dock closed by default', termDockMarkup.includes('data-open') === false)
+check('terminal dock draws the kit', termDockMarkup.includes('class="dst-grip"') && termDockMarkup.includes('class="dst-bar"'))
+check('terminal dock has no xterm before mount', termDockMarkup.includes('xterm') === false)
+check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.1'))
+
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')
 process.exitCode = failures === 0 ? 0 : 1

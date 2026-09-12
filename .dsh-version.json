@@ -3,7 +3,7 @@
   "dsh": "0.1.5-rc.1",
   "vendoredFrom": "0.1.5-rc.1",
   "platforms": ["win32", "darwin", "linux"],
-  "comment_platforms": "The plugins are plain JavaScript and platform-neutral; the only OS-specific code is dsh-open-in-app's file-browser launcher (explorer.exe / open / xdg-open, WSL-aware). The launchers run on Windows (install.bat, PowerShell 5.1 or 7) and on macOS/Linux (install.sh, PowerShell 7+).",
+  "comment_platforms": "The plugins are plain JavaScript and platform-neutral; the only OS-specific code is a launcher choosing the right command for the host: dsh-open-in-app's file-browser launcher (explorer.exe / open / xdg-open, WSL-aware) and dsh-terminal's shell resolver (pwsh.exe or powershell.exe / $SHELL or /bin/zsh / $SHELL or /bin/bash). The launchers run on Windows (install.bat, PowerShell 5.1 or 7) and on macOS/Linux (install.sh, PowerShell 7+).",
   "packages": {
     "dsh-vn-master": {
       "version": "0.1.0-alpha.1",
@@ -42,6 +42,14 @@
       "rowOverrides": [],
       "role": "the workspace's COMMIT HISTORY as a page tab type, labelled History in the capsule and the chip while the package, row and address keep the gittree name (guide order 30, after Files and Editor), with the branch and current commit in its file bar; its Node half owns read-only /api/dsh-gittree routes, and the tab reads state with brief=1 so no file list is ever built - no fork, no core row disabled, nothing for sync-vendored.ps1 to track",
       "uses": ["dsh-rightbar", "git on PATH"]
+    },
+    "dsh-terminal": {
+      "version": "0.1.0-alpha.1",
+      "rows": ["terminal"],
+      "rowOverrides": [],
+      "role": "a real shell in a bottom dock: a header control (order 30, immediately right of Open In...) toggles a horizontal panel that starts at the left bar's right edge, runs to the full page width and sits UNDER the middle and right columns, which make room for it - the frame's inline height becomes calc(100% - Hpx) while the dock is open and is restored exactly on close, and the left edge is the frame's resolved gridTemplateColumns first track, so it follows the left bar opening, collapsing and being dragged. xterm.js is vendored (lib/vendor/xterm.js + xterm.css, GENERATED from vendor/) the way the editor vendors CodeMirror, and the Node half owns /api/dsh-terminal/health, /api/dsh-terminal/vendor/* and ONE authenticated WebSocket upgrade (/api/dsh-terminal/pty) that attaches a browser xterm to a real PTY from the HARNESS'S OWN node-pty - resolved, never installed (anchors: process.argv[1], $DSH_HOME/profiles, this package), with a graceful 'no PTY on this host' instead of a broken boot. One PTY per (conversation, slot), kept five minutes after its last socket so a reload reattaches with a scrollback replay, reaped otherwise. No fork, no core row disabled, nothing for sync-vendored.ps1 to track",
+      "uses": ["@deepseek-ai/dsh-client-ui-conversation", "the harness installation's node-pty and ws"],
+      "vendors": ["@xterm/xterm@5.5.0", "@xterm/addon-fit@0.10.0"]
     },
     "dsh-modal": {
       "version": "0.1.0-alpha.1",

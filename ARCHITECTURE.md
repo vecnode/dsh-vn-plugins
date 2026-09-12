@@ -646,7 +646,121 @@ data in `sync-vendored.ps1`: a harness bump that moves the patched code fails th
 re-sync loudly instead of shipping a fork that silently lost its behavior, and
 the generated banner lists the applied patches.
 
-## 11. The installer
+## 11. The terminal dock (dsh-terminal)
+
+The pack's first surface that is not in a column. A real shell in a **bottom
+dock**: one horizontal panel that starts at the right edge of the left bar, runs
+to the full width of the page, and sits **under** the middle and right columns -
+which make room for it instead of being covered. Like §7 it forks nothing,
+disables no core row and publishes no service; unlike §7 it does vendor a browser
+engine and does own an upgrade route.
+
+**Where it registers.** Two seats, both through `ctx.slots.inject` so neither is
+lost to a registration order:
+
+| Seat | Kind | Order | Why there |
+|---|---|---|---|
+| `conversation.session.header.utilities` | list | 30 | the last utility: right of **Open In...** (-10), the pack's Themes (-20), and immediately left of the right bar's own toggle |
+| `shell.overlay` | list (root) | 50 | the layout package renders it inside the frame, in the app's React tree |
+
+The header **corner** is deliberately avoided: `conversation.session.header.corner`
+is a `single` slot and the right bar's toggle already owns it, so a registration
+there would replace it. The terminal glyph is drawn in the bundle - primitives
+ships no terminal icon - and `Tooltip` is the only primitive used.
+
+**Why the dock is `position:fixed` inside the overlay.** A bottom row cannot be a
+grid child of the frame (that would mean writing a foreign node into a
+React-managed container), and it cannot be positioned relative to the frame
+either: the frame declares `overflow:hidden`, which clips an absolutely
+positioned child. A fixed box escapes that clip while still living inside the
+overlay layer, whose `z-index:20` puts the dock above the columns (10/11) and
+below a fullscreen right bar (40) with no further work.
+
+**How the geometry is derived** (there is no layout-service API for a bottom
+region - `ctx.layout` only exposes `openRightbar`/`closeRightbar`/`toggleSidebar`/
+`selectPanel`):
+
+- **Left edge**: the frame's columns are an inline
+  `gridTemplateColumns: <sidebar>px minmax(0,1fr) <rightbar>px`, so the resolved
+  computed style's first track IS the left bar's width - no hashed class names,
+  and it tracks the bar opening, collapsing and being dragged.
+- **Room**: while open, the frame's inline height becomes
+  `calc(100% - <dock>px)`; on close the previous inline value is restored
+  exactly. React never writes `style.height` on the frame (it writes
+  `gridTemplateColumns`), so the override survives re-renders.
+- **Live moves**: a `MutationObserver` on the frame's `style` attribute (a drag
+  rewrites it every frame) plus a `resize` listener.
+- **Intent vs geometry**: `data-open` is user intent, `data-suspended` is derived
+  (a fullscreen right bar takes the viewport). The observer writes only the
+  derived one. This split is not cosmetic: the first spike run had the observer
+  set the open state too, so the close that restored the frame's height
+  re-triggered the observer and reopened the dock. The spike ran that scenario in
+  a real engine before any of the package existed.
+- The grip drags the height (120px ... 70% of the viewport) and it is remembered
+  in `localStorage`.
+
+**Where the PTY comes from.** Not from this pack. The harness already ships
+`node-pty` (ConPTY prebuilds for `win32-x64/arm64`, plus `darwin-x64/arm64` and
+`linux-x64/arm64`) in its own dependency closure, so nothing is installed and
+nothing is built natively. What an out-of-tree plugin must solve is
+**resolution**: Node resolves bare specifiers by walking up from the importing
+FILE, and this package's file is in this repository, so `import('node-pty')` from
+here fails. `lib/pty.js` resolves through `process.argv[1]` (the running entry,
+whose parent walk lands in that installation), then `$DSH_HOME/profiles` (which
+`@deepseek-ai/dsh-app-boot` fills with the installation closure for exactly this),
+then this package's own directory. `ws` is loaded the same way. Because node-pty
+is a harness internal rather than a published API, resolution failure is a
+first-class outcome: `health` answers `available:false` with the reason, the dock
+renders it, and the boot is untouched.
+
+**The routes.** Three authenticated HTTP routes through `connection.fetch` - the
+mechanism §6 uses - and ONE **upgrade** route, which that mechanism does not
+cover:
+
+| Route | What it is |
+|---|---|
+| `GET /api/dsh-terminal/health` | PTY availability, the shell's label, the capacity, the platform |
+| `GET /api/dsh-terminal/vendor/xterm.js` / `xterm.css` | the vendored engine (ETag-cached), like §6's CodeMirror bundle |
+| `WS /api/dsh-terminal/pty` | the terminal itself |
+
+`ctx.webServer.registerUpgrade` hands the raw socket over, so this package
+performs the gate itself - `connection.requestRejection(req)` (host/origin fence,
+then browser authentication) and a raw `401`/`403` written into the socket when
+it answers - the same two-step the product's own WebSocket mux performs. No
+unauthenticated socket ever reaches a PTY. The protocol is text frames with a
+`U+0000` prefix on control frames, because the shell's output is arbitrary text
+and `cat` of a JSON file must never be mistaken for a control message
+(`{"t":...}` as shell input is a tracked check). Backpressure pauses the PTY past
+4 MiB of unflushed socket bytes rather than dropping output, and a heartbeat
+drops dead sockets.
+
+**Sessions.** One PTY per (conversation, slot), at most 8 per conversation, cwd
+resolved exactly as §6/§7 resolve it. Output is retained in a 256 KiB scrollback
+ring, and a session whose last socket goes away is kept for five minutes before
+the reaper ends it - so a reload (or closing the dock) reattaches and replays
+instead of losing the shell. Every timer is `unref`ed: a terminal can never hold
+the harness process open. `pid` is reported `null` in the first `ready` frame on
+Windows, where node-pty answers `0` until ConPTY has attached.
+
+**The vendored engine.** xterm.js 5.5.0 plus `@xterm/addon-fit` 0.10.0, built by
+`packages/dsh-terminal/vendor/` exactly the way §6 builds CodeMirror (npm install
++ one documented esbuild line), producing `lib/vendor/xterm.js`
+(`window.DSHTerminal`) and its stylesheet. The browser half fetches them lazily
+the first time a dock opens and injects the script through a blob URL.
+
+**A terminal is an unsandboxed shell.** That is what a terminal is: it does not
+pass through the file-policy sandbox the model's tools obey. The gate is the
+connection's own authentication, and the dock exists only where `webServer` and
+`connection` do.
+
+**What the checks pin.** `check-node-routes.mjs` drives the real protocol against
+a real PTY (`init` -> `ready` -> a command answered -> `kill`), proves a JSON line
+is shell input rather than a control frame, and proves an unauthenticated upgrade
+is refused - skipping only the live part, loudly, on a host with no PTY.
+`check-client-bundles.mjs` pins the bundle id, both seats, the order and the
+rendered markup.
+
+## 12. The installer
 
 The installer is **two halves, one behaviour** - the host picks the half, and
 neither half needs the other:
@@ -697,7 +811,8 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
   reach the profile.
 - **Live links**: the web profile installs every bundle (`dsh-vn-master` — the
   blank master, so a profile that lists it still gets no client half — plus
-  `dsh-rightbar`, `dsh-rightbar-files`, `dsh-editor`, `dsh-gittree`, `dsh-modal`,
+  `dsh-rightbar`, `dsh-rightbar-files`, `dsh-editor`, `dsh-gittree`,
+  `dsh-terminal`, `dsh-modal`,
   `dsh-themes`, `dsh-open-in-app`) as `pnpm link:` symlinks straight into this repo (detected by
   `Test-LiveLink` / `is_live_link()`, comparing realpaths case-insensitively on
   Windows). Code edits then already apply - a restart of
@@ -717,7 +832,7 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
   `dsh-rightbar` also removes the disables, so the shipped rows come back on the
   next boot.
 
-## 12. Versioning and upgrade path
+## 13. Versioning and upgrade path
 
 - `.dsh-version.json` pins the dsh line, the `vendoredFrom` line the fork was
   taken from, and per-package versions.
@@ -734,7 +849,7 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
   where a route must declare `requestBody` or its handler never runs) and the
   session-root lookup.
 
-## 13. Troubleshooting quick table
+## 14. Troubleshooting quick table
 
 | Symptom | Cause / action |
 |---|---|
@@ -762,6 +877,12 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
 | The History tab says "Not a git repository" | the conversation folder is not inside a repository: the route runs `git rev-parse --show-toplevel` from it and answers a typed `NOT_A_REPO` instead of guessing |
 | The History tab says "git is not installed" | `git` is not on the **server's** `PATH` (the routes spawn it directly and report `GIT_MISSING`); install git on the host running `dsh web` |
 | The History list is empty although the repository has commits | the folder lives inside a repository whose root is higher up, so commits that never touch this folder are deliberately hidden; check `git log` in that folder |
+| No Terminal button in the conversation header | `dsh-terminal` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or the bundle did not activate - check the console for `[dsh-terminal]` |
+| The dock says "No terminal on this host" | the harness installation's `node-pty` could not be resolved from this process (`process.argv[1]`, `$DSH_HOME/profiles`, or beside the package); the dock's notice carries the reason, and `GET /api/dsh-terminal/health` reports `available:false` with it. The rest of the pack is unaffected |
+| The dock does not open, or opens at the wrong place | the frame it measures is gone: the dock positions itself from `[data-shell-overlay]`'s parent and that frame's resolved `gridTemplateColumns`, so a harness line that stops using grid columns for the layout needs §11 updated |
+| The terminal panel covers the conversation instead of pushing it up | the frame's inline `height: calc(100% - <dock>px)` was removed or overridden by something else writing `style.height` on the frame element |
+| A terminal prints nothing after a page reload | the shell is kept only five minutes after its last socket (`DETACH_GRACE_MS`); past that it was reaped and the dock opens a NEW shell in the same folder |
+| The terminal's `Ctrl+C` copies instead of interrupting | it must not: `Ctrl+C` is SIGINT and clipboard is `Ctrl+Shift+C` (`Cmd+C` on macOS). A single-key difference here is a bug, not a preference |
 | Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; both halves read it from `node_modules/.modules.yaml` and auto-match - re-run the installer |
 | `-Target desktop` is rejected | intentional: DSH Desktop is no longer a target of this pack |
 | `.ps1` parse error after editing | non-ASCII character crept in (smart quotes/dash); keep scripts ASCII-only |

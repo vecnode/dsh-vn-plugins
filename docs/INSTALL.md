@@ -84,6 +84,13 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
    Files tab, the new **Editor** and **History** — the workspace’s commit
    history — it needs `git` on the `PATH` of the host running `dsh web`). The tab
    strip’s **"+"** opens that Start page again at any time.
+3. The header’s **Terminal** button (the last one in that group, right of
+   **Open In…**) opens the **bottom dock**: a real shell in the conversation’s
+   folder, under the conversation and the right bar, which make room for it.
+   Drag its top edge to resize it, `+` in its bar opens more terminals, and
+   `Ctrl+Shift+C` / `Ctrl+Shift+V` copy and paste (a bare `Ctrl+C` still
+   interrupts). It closes with the same button or its `×`; the shell is kept
+   briefly, so reopening the dock in that conversation reattaches to it.
 
 ## Troubleshooting
 
@@ -170,3 +177,25 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   file to the ordinary address and lets the registry decide; with neither
   `dsh-editor` nor a shipped preview claiming that extension, nothing can draw
   it. That is the same rule the Files tab follows.
+- **No Terminal button in the header** — `dsh-terminal` is not mounted; a new
+  package needs one install run (`install.bat` / `./install.sh`, or `-Force`),
+  then a restart. The button is the last one in the header group, immediately
+  right of **Open In…**. Check the console for `[dsh-terminal]` if it still does
+  not show.
+- **The dock says "No terminal on this host"** — the harness installation's
+  `node-pty` could not be resolved from the server process. The notice carries
+  the reason, and `GET /api/dsh-terminal/health` reports `available:false` with
+  it. Nothing else in the pack is affected.
+- **The dock opens but the panel does not make room for itself** — something
+  else is writing the app frame's inline `height` (the dock sets
+  `calc(100% - <dock>px)` while open and restores the previous value on close).
+- **A shell's output is gone after a page reload** — the shell itself is kept for
+  five minutes after its last connection, but the scrollback ring is 256 KiB:
+  past that the dock opens a new shell in the same folder.
+- **`Ctrl+C` in the terminal copies instead of interrupting** — it must not: a
+  bare `Ctrl+C` is SIGINT and the clipboard is `Ctrl+Shift+C` (`Cmd+C` on macOS).
+  A single-key difference here is a bug, not a preference.
+- **The terminal is a full shell with no sandbox** — that is what a terminal is.
+  It does not pass through the file policy the model's tools obey; the server
+  gate is the same authentication the Web GUI itself uses, checked before the
+  socket ever reaches a PTY.

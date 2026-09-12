@@ -1,0 +1,180 @@
+# dsh-terminal (alpha.1)
+
+**Terminal** is a **bottom dock** for the DeepSeek Harness web GUI: a real shell,
+in the app, under the conversation. A header button — the same 28px round control
+the right bar's own toggle wears, sitting immediately right of **Open In...** —
+opens a horizontal panel that starts at the **right edge of the left bar**, runs
+to the **full width of the page**, and sits **under** the middle and right
+columns. Those columns make room for it: the app shrinks, nothing is covered.
+
+Inside the panel is **xterm.js** talking to a **real PTY** over an authenticated
+WebSocket: ConPTY PowerShell on Windows, the login shell on macOS/Linux. Prompts,
+colors, TUI programs, `Ctrl+C`, resizes and scrollback all behave like a terminal
+because it is one.
+
+## How it plugs in
+
+Nothing shipped is patched, no core row is disabled, and nothing is forked:
+this package adds surface. It contributes two things and owns one row.
+
+| Piece | Value |
+|---|---|
+| row | `terminal` (`cordis.patch.yml`, an `insert`) |
+| header control | `conversation.session.header.utilities`, `order: 30` |
+| dock | `shell.overlay` (the layout package's root-scoped **list**), `order: 50` |
+| client `inject` | `slots` (code), `@deepseek-ai/dsh-client-ui-conversation` (package) |
+| primitives used | `Tooltip` only — the terminal glyph is drawn here |
+| Node routes | `/api/dsh-terminal/health`, `/api/dsh-terminal/vendor/xterm.js`, `/api/dsh-terminal/vendor/xterm.css` |
+| Node upgrade | `/api/dsh-terminal/pty` (WebSocket, authenticated) |
+
+**Why the header list and not the corner.** `conversation.session.header.corner`
+is a **single**-occupant slot that the right bar's toggle already owns, so
+registering there would replace it. `...header.utilities` is a **list**: Open In
+sits at `-10`, the pack's Themes at `-20`, and this control at `30` — the last
+utility, directly left of the corner. Change that one number to move the button.
+
+**Why `shell.overlay` and not a second React root.** The dock has to escape the
+frame's `overflow:hidden` to sit at the very bottom of the window, and it has to
+live in the app's tree to inherit its React context. Both hold at once: the
+overlay layer is rendered *inside* the frame, and the dock is `position:fixed`,
+which no ancestor's overflow can clip. The layer's own `z-index:20` also puts the
+dock above the columns (10/11) and below a fullscreen right bar (40) for free.
+
+## Geometry
+
+The dock is not a grid child of the app frame (that would mean writing foreign
+nodes into a React-managed container), so it positions itself:
+
+- **Left edge** — the frame's columns are an inline
+  `gridTemplateColumns: <sidebar>px minmax(0,1fr) <rightbar>px`, so the RESOLVED
+  computed style carries the left bar's width in px. No hashed class names, and
+  it follows the left bar opening, collapsing (`0`) and being dragged.
+- **Room** — while the dock is open the frame's inline height becomes
+  `calc(100% - <dock>px)`; on close the previous inline value is restored
+  exactly (React never writes `style.height` on the frame — it writes
+  `gridTemplateColumns` — so the override is stable).
+- **Live tracking** — a `MutationObserver` on the frame's `style` attribute (a
+  drag rewrites it every frame) plus a `resize` listener.
+- **Intent is separate from geometry.** `data-open` is user intent;
+  `data-suspended` is derived (a fullscreen right bar takes the viewport and the
+  dock yields). The observer only ever writes the derived one — the first spike
+  run failed exactly here, reopening the dock on the very close that restored the
+  frame's height.
+- The panel can be **dragged** by its top grip (120px … 70% of the viewport) and
+  the height is remembered in `localStorage`.
+
+## What it does
+
+- **Several terminals per conversation** (up to 8): the bar's chips switch
+  between them, `+` opens another, a chip's `×` kills that one shell. The dock
+  is bound to the conversation that opened it; **switching conversation closes
+  it**.
+- **Clipboard** is `Ctrl+Shift+C` / `Ctrl+Shift+V` (`Cmd` on macOS). A bare
+  `Ctrl+C` stays **SIGINT**, which is the whole reason for the shift.
+- **Follows the app's appearance**: the palette is re-applied from
+  `body[data-ds-dark-theme]` and re-paints the live terminals; the dock element
+  carries `data-appearance` so the appearance in force is visible.
+- **Survives a reload.** Detaching (page reload, closing the dock) closes the
+  socket but not the shell: the PTY is kept for five minutes, and a reattach
+  replays the retained scrollback (256 KiB ring). Nothing is left running for
+  ever — an unattached session is reaped.
+- **Graceful degradation.** If the host has no PTY, the dock says so with the
+  reason instead of failing; the row still mounts and the rest of the pack is
+  untouched.
+
+## The PTY comes from the harness, not from this pack
+
+A browser terminal needs a **real** pty, and the harness already installs
+`node-pty` (prebuilds for `win32-x64/arm64` ConPTY, `darwin-x64/arm64`,
+`linux-x64/arm64`) as part of its own dependency closure. So this package
+installs nothing and builds nothing native. What it does have to do is **find**
+it: an out-of-tree plugin's own path is this repository, and Node resolves bare
+specifiers by walking up from the importing FILE, so `import('node-pty')` from
+here fails. `lib/pty.js` therefore resolves through, in order:
+
+1. `process.argv[1]` — the running entry, whose parent walk lands in that
+   installation's `node_modules`;
+2. `$DSH_HOME/profiles` — `@deepseek-ai/dsh-app-boot` mirrors the installation
+   closure into `$DSH_HOME/profiles/node_modules` for exactly this;
+3. this package's own directory — so a future line where `node-pty` is a
+   declared dependency here works unchanged.
+
+`ws` is loaded the same way. Because `node-pty` is a harness internal rather than
+a published API, resolution failure is a first-class outcome: `GET
+/api/dsh-terminal/health` answers `available:false` with the reason, and the dock
+renders it.
+
+**The dock is an unsandboxed shell.** That is what a terminal is: it does not
+pass through the file-policy sandbox that the model's tools obey. The gate is the
+connection's own authentication, checked *before* the socket reaches `ws`
+(`connection.requestRejection`, then a raw 401/403 written into the socket — the
+same two-step the product's own WebSocket mux performs).
+
+## Wire protocol
+
+Text frames; a control frame is prefixed with `U+0000` so that `cat` of a JSON
+file can never be mistaken for one.
+
+| Direction | Frame |
+|---|---|
+| → | `\0{"t":"init","session":"<conversation>","slot":0,"cols":80,"rows":24}` (always first) |
+| → | `\0{"t":"resize","cols":N,"rows":N}` · `\0{"t":"kill"}` · `\0{"t":"ping"}` |
+| → | anything else: written to the shell verbatim |
+| ← | `\0{"t":"ready","key","index","shell","cwd","pid","cols","rows","attached","replay"}` |
+| ← | `\0{"t":"exit","code","signal"}` · `\0{"t":"closed","reason"}` · `\0{"t":"pong"}` · `\0{"t":"error","code","message"}` |
+| ← | anything else: raw terminal output |
+
+Backpressure is honest, not invisible: past 4 MiB of unflushed socket bytes the
+PTY is paused (`IPty.pause`) and resumed once the queue drains. Nothing is
+dropped. A heartbeat (`ping`/`pong`) drops dead sockets. `pid` is `null` in the
+first `ready` frame on Windows, where node-pty reports `0` until ConPTY attaches.
+
+## Files
+
+```
+package.json          one dsh bundle: the row, plus the client half
+cordis.patch.yml      bundle layer: inserts the 'terminal' row (nothing else)
+lib/index.js          Node half: the routes above + the authenticated upgrade
+lib/shell.js          the ONE per-OS file: which shell this host runs
+lib/pty.js            node-pty resolution, the session registry, the reaper
+lib/client.js         browser half (module-table bundle, no build step)
+lib/vendor/xterm.js   GENERATED - vendored xterm.js classic bundle (window.DSHTerminal)
+lib/vendor/xterm.css  GENERATED - its stylesheet, served beside it
+vendor/package.json + vendor/entry.js - reproducible build inputs
+```
+
+### Regenerating the vendored xterm bundle
+
+```sh
+cd packages/dsh-terminal/vendor
+npm install
+npx --yes esbuild entry.js --bundle --minify --format=iife --global-name=DSHTerminal \
+  --target=es2020 --outfile=../lib/vendor/xterm.js
+cp node_modules/@xterm/xterm/css/xterm.css ../lib/vendor/xterm.css
+```
+
+(On Windows use `..\lib\vendor\xterm.js` in the last argument and `Copy-Item` for
+the stylesheet.) The bundle is **generated**: never edit `lib/vendor/*` by hand.
+
+## Checks
+
+```sh
+node scripts/checks/check-client-bundles.mjs   # bundle id, both seats, order 30, markup
+node scripts/checks/check-node-routes.mjs     # routes, etag, and a LIVE shell over a real socket
+```
+
+The node check drives the real protocol against a real PTY when this host has
+one (and says so when it does not): `init` → `ready` → a command answered →
+`kill`, a JSON line proven to be shell input rather than a control frame, and an
+unauthenticated upgrade refused with 401.
+
+## Known limits
+
+- One PTY per (conversation, slot); slots are capped at 8 per conversation.
+- Sessions do not survive a harness restart (they are process-local), and the
+  scrollback ring is 256 KiB — older output is dropped, not paged.
+- The dock is positioned from the frame's resolved grid tracks: a harness line
+  that stops using `grid-template-columns` for the columns would need this file
+  updated (there is no layout service API for a bottom region).
+- A fullscreen right bar suspends the dock while it is up.
+- Windows reports `pid: null` in the first `ready` frame (see above).

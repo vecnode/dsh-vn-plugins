@@ -1,0 +1,17 @@
+# dsh-terminal bundle layer (alpha).
+#
+# One extra row owns the terminal dock: its Node half registers the
+# authenticated /api/dsh-terminal routes (the vendored xterm assets and a
+# health probe) plus ONE WebSocket upgrade route, /api/dsh-terminal/pty, which
+# attaches a browser xterm to a real PTY. The browser half contributes the
+# header button that opens the dock.
+#
+# Nothing shipped is patched and no core row is disabled: this package adds
+# surface, it replaces nothing, so there is no `disabled: true` here and nothing
+# for scripts/sync-vendored.ps1 to keep in sync - like dsh-gittree, there is no
+# fork of a core bundle. The dock is not a slot occupant either: it mounts its
+# own element on document.body (the way dsh-modal owns its overlay), because a
+# bottom row spanning the frame cannot live inside the frame's own grid.
+- insert:
+    - id: terminal
+      name: 'dsh-terminal'
