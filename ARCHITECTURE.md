@@ -626,6 +626,14 @@ where the mark was, and the product text **VN Harness**.
   rail's `.hHd-Xa_railMark`, and `content:"VN Harness"` on `.hHd-Xa_brandName`.
   Being in the same pinned rule set as the band, they are installed once and need
   no refresh on `theme/change`.
+- **The text wears the chat title's type** (alpha.7): the shipped brand name is
+  `18px/600`, while the conversation's own title - the current crumb in the strip
+  this band is levelled with - is `14px/20px/500` (`.wSkVaW_crumb` +
+  `.wSkVaW_crumbCurrent` in ui-conversation). Two sizes a few pixels apart read as
+  a mistake, so the product text takes the title's: `font-size:14px;
+  font-weight:500;line-height:20px;letter-spacing:0`. The tracked check pins the
+  declaration, and the served `ui-conversation` bundle was compared against the
+  served `dsh-themes` bundle to confirm both sides say `14px/20px/500`.
 - **It is pinned to the sidebar's hashed class names**, exactly like the band
   above it. That is the accepted cost of this row: the harness offers no seam for
   the branding either, and a harness line that renames those classes needs the

@@ -59,7 +59,7 @@ window.__ModuleLoader__.load({
     /** The slot id of this occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.6'
+    const PLUGIN_VERSION = '0.1.0-alpha.7'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /** The Session header's utilities slot (the group the Open In control sits in). */
@@ -406,6 +406,13 @@ window.__ModuleLoader__.load({
         'html .hHd-Xa_root .hHd-Xa_brandMark::before,html .hHd-Xa_root .hHd-Xa_railMark::before{content:"";width:24px;height:24px;border-radius:50%;background:#000;flex:none;display:block}',
         // The name: the pack's own product text.
         'html .hHd-Xa_root .hHd-Xa_brandName::before{content:"VN Harness"}',
+        // ...wearing the CHAT TITLE's type, not the shipped brand name's. The
+        // conversation's own title - the current crumb in the header strip this
+        // band is levelled with - is `.wSkVaW_crumb` + `.wSkVaW_crumbCurrent` in
+        // ui-conversation: 14px / 20px at weight 500. The shipped brand name is
+        // 18px / 600 in the same 30px strip, so the two read as different sizes a
+        // few pixels apart; this makes the product text the title's size.
+        'html .hHd-Xa_root .hHd-Xa_brandName{font-size:14px;font-weight:500;line-height:20px;letter-spacing:0}',
       ].join('')
       let tag = null
       try {

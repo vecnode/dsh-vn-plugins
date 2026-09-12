@@ -213,7 +213,8 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 - **The left bar still shows the fish and the "deepseek" wordmark** — the branding
   override arrives with `dsh-themes` alpha.6; reinstall (`install.bat` /
   `./install.sh`, or `-Force`) so that version is in the profile, then restart and
-  hard-refresh. The row should show a black disc and **VN Harness**.
+  hard-refresh. The row should show a black disc and **VN Harness**, at the chat
+  title's size (alpha.7).
 - **The left bar's branding looks unstyled or empty after a harness update** —
   the override is pinned to the sidebar's hashed class names (like the band above
   it). A harness line that renames them matches nothing; the fix is to re-read the

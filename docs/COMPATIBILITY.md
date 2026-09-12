@@ -280,6 +280,14 @@ The pack targets the harness line DeepSeek ships to the raw web install
   like the band itself, so a harness bump that renames them needs that one rule
   updated (and the tracked check fails loudly).
 
+- **themes alpha.7**: the branding text wears the **chat title's type**. The
+  shipped brand name is `18px/600` while the conversation's own title (the current
+  crumb in the header strip the band is levelled with) is `14px/20px/500`, so the
+  two read as different sizes a few pixels apart; **VN Harness** now takes the
+  title's size, weight and line height. The check pins the declaration, and the
+  served `ui-conversation` bundle was compared with the served `dsh-themes` bundle
+  to confirm both declare `14px/20px/500`.
+
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the
   browser.

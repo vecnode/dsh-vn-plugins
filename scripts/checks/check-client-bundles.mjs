@@ -567,6 +567,13 @@ check(
 )
 check('branding draws the mark as a 24px black disc', topBar.includes('.hHd-Xa_brandMark::before,html .hHd-Xa_root .hHd-Xa_railMark::before{content:"";width:24px;height:24px;border-radius:50%;background:#000'))
 check('branding draws the product name', topBar.includes('.hHd-Xa_brandName::before{content:"VN Harness"}'))
+// The product text wears the conversation TITLE's type: ui-conversation's current
+// crumb is 14px/20px at weight 500, while the shipped brand name is 18px/600 in
+// the same 30px strip - they read as different sizes a few pixels apart.
+check(
+  'branding wears the chat title\'s type',
+  topBar.includes('.hHd-Xa_brandName{font-size:14px;font-weight:500;line-height:20px;letter-spacing:0}'),
+)
 check('branding covers the collapsed rail too', topBar.includes('.hHd-Xa_railMark::before'))
 
 // --------------------------------------------------------------- dsh-gittree

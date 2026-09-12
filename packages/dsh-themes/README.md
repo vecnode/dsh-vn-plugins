@@ -1,4 +1,4 @@
-# dsh-themes (alpha.6)
+# dsh-themes (alpha.7)
 
 **Themes** adds one small control to the DeepSeek Harness web GUI's conversation
 header: a button, the size and dress of the header's other icon buttons, sitting
@@ -182,9 +182,19 @@ html .hHd-Xa_root .hHd-Xa_brandName::before{content:"VN Harness"}
   element (`.hHd-Xa_railMark`), and gets the same disc.
 - **The disc is plain black**, as asked: against the dark theme's sidebar fill it
   reads as a dark dot. One line here changes it if that is ever wanted.
-- Verified in the running app: the shipped art computes to `display:none`, and the
-  disc computes to `24px × 24px`, `border-radius:50%`, `rgb(0,0,0)`, with the name
-  reading `"VN Harness"` — in the wide row and in the rail.
+- **The text wears the chat title's type** (alpha.7). The shipped brand name is
+  `18px / 600` while the conversation's own title — the current crumb in the header
+  strip this band is levelled with — is `14px / 20px / 500`, so the two read as
+  different sizes a few pixels apart. The product text now takes the title's:
+
+  ```css
+  html .hHd-Xa_root .hHd-Xa_brandName{font-size:14px;font-weight:500;line-height:20px;letter-spacing:0}
+  ```
+- Verified in the running app: the shipped art computes to `display:none`, the disc
+  to `24px × 24px`, `border-radius:50%`, `rgb(0,0,0)`, the name to `"VN Harness"`,
+  and the text to `14px / 20px / 500` — the same numbers the **served**
+  `ui-conversation` bundle declares for `.wSkVaW_crumb` / `.wSkVaW_crumbCurrent`
+  (compared against those bytes directly, not against a copy).
 
 ## Where it sits
 
