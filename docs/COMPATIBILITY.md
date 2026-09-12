@@ -288,6 +288,21 @@ The pack targets the harness line DeepSeek ships to the raw web install
   served `ui-conversation` bundle was compared with the served `dsh-themes` bundle
   to confirm both declare `14px/20px/500`.
 
+- **themes alpha.8**: the branding mark is now the **app icon** —
+  `assets/vn-harness.svg` at the pack root, a black circle centred on (12,12) with
+  a **1px transparent margin** inside its box. That margin is the fix for alpha.7's
+  "cut" disc: it was drawn edge-to-edge inside boxes the app paints with
+  `overflow:hidden` (the sidebar's brand button is exactly 24px tall), where the
+  circle lost a fraction of a pixel on each side. The same icon replaces the whale
+  in the empty conversation's hero ("Into the Unknown", the
+  `conversation.hero.brand.mark` slot) at 26px, so the new-session screen wears the
+  same mark as the sidebar. The icon is **inlined as a data URI** — no route, no
+  request, no Node half — with the asset as the source of truth and a tracked check
+  comparing the inlined geometry against it. Verified in the running app (sidebar,
+  rail and hero) and at the pixel level: at 24px and 26px the opaque box is exactly
+  square with a 1px margin on all four sides, every row and column mirrors, the
+  corners are transparent and nothing touches the edge.
+
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the
   browser.

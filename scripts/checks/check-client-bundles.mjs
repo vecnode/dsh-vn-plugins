@@ -565,7 +565,36 @@ check(
   'branding hides whatever occupies the brand slots',
   topBar.includes('.hHd-Xa_brandMark>*,html .hHd-Xa_root .hHd-Xa_brandName>*,html .hHd-Xa_root .hHd-Xa_railMark>*{display:none!important}'),
 )
-check('branding draws the mark as a 24px black disc', topBar.includes('.hHd-Xa_brandMark::before,html .hHd-Xa_root .hHd-Xa_railMark::before{content:"";width:24px;height:24px;border-radius:50%;background:#000'))
+// alpha.8: the mark is the app ICON - `assets/vn-harness.svg` at the pack root -
+// inlined as a data URI. The artwork carries a 1px transparent margin inside its
+// 24px box, because the mark sits in boxes painted with `overflow:hidden` (the
+// sidebar's brand button is exactly 24px tall) where an edge-to-edge circle loses
+// a fraction of a pixel on each side, which is what alpha.7's disc looked like.
+// The comparison below is against that asset, so the inlined copy cannot drift.
+const iconMatch = /background:url\("data:image\/svg\+xml,([^"]+)"\)/.exec(topBar)
+const inlinedIcon = iconMatch === null ? '' : decodeURIComponent(iconMatch[1])
+const iconGeometry = (svg) => {
+  const box = /viewBox="([^"]+)"/.exec(svg)
+  const circle = /<circle[^>]*cx="([^"]+)"[^>]*cy="([^"]+)"[^>]*r="([^"]+)"[^>]*fill="([^"]+)"/.exec(svg)
+  if (box === null || circle === null) return null
+  return { box: box[1], cx: Number(circle[1]), cy: Number(circle[2]), r: Number(circle[3]), fill: circle[4] }
+}
+const assetIcon = iconGeometry(readFileSync(path.join(repo, 'assets/vn-harness.svg'), 'utf8'))
+const shippedIcon = iconGeometry(inlinedIcon)
+console.log('     icon inlined from the asset: ' + JSON.stringify(shippedIcon))
+check('branding inlines the app icon', shippedIcon !== null)
+check('the inlined icon matches assets/vn-harness.svg', JSON.stringify(shippedIcon) === JSON.stringify(assetIcon))
+check('the icon is a circle centred in its box', shippedIcon !== null && shippedIcon.cx * 2 === 24 && shippedIcon.cy * 2 === 24)
+check('the icon keeps a margin inside its box', shippedIcon !== null && shippedIcon.r < 12)
+check('the icon is black', shippedIcon !== null && shippedIcon.fill === '#000000')
+check('the mark draws the icon at 24px', topBar.includes('.hHd-Xa_brandMark::before,html .hHd-Xa_root .hHd-Xa_railMark::before{content:"";width:24px;height:24px'))
+check('the icon is not stretched', topBar.includes('center/contain no-repeat'))
+// The empty conversation's hero ("Into the Unknown") draws the same whale from its
+// own single slot, so it gets the same treatment.
+check(
+  'the hero whale is replaced by the icon',
+  topBar.includes('.pXSMma_fishHitbox>*{display:none!important}') && topBar.includes('.pXSMma_fishHitbox::before{content:"";width:26px;height:26px'),
+)
 check('branding draws the product name', topBar.includes('.hHd-Xa_brandName::before{content:"VN Harness"}'))
 // The product text wears the conversation TITLE's type: ui-conversation's current
 // crumb is 14px/20px at weight 500, while the shipped brand name is 18px/600 in

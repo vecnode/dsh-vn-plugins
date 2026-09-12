@@ -621,11 +621,25 @@ where the mark was, and the product text **VN Harness**.
   `<div data-slot="sidebar.brand.mark" style="display: contents">`, so the rule
   hides *children* - `display:none!important` - rather than assuming an `<svg>`
   from one particular provider. That also covers the layout's own fallback label.
-- **The replacements are drawn, not inserted**: a `::before` disc at the slot's
-  own 24px (round, `#000`) on `.hHd-Xa_brandMark`, the same disc on the collapsed
-  rail's `.hHd-Xa_railMark`, and `content:"VN Harness"` on `.hHd-Xa_brandName`.
-  Being in the same pinned rule set as the band, they are installed once and need
-  no refresh on `theme/change`.
+- **The replacements are drawn, not inserted**: a `::before` carrying the **app
+  icon** (`assets/vn-harness.svg` at the pack root, inlined as a data URI) at the
+  slot's own 24px on `.hHd-Xa_brandMark`, the same icon on the collapsed rail's
+  `.hHd-Xa_railMark`, and `content:"VN Harness"` on `.hHd-Xa_brandName`. Being in
+  the same pinned rule set as the band, they are installed once and need no refresh
+  on `theme/change`.
+- **The icon carries its own margin, and that is the point** (alpha.8). The mark is
+  painted into boxes the app declares `overflow:hidden` - the sidebar's brand button
+  is exactly 24px tall - so an edge-to-edge circle loses a fraction of a pixel on
+  each side, which is what alpha.7's drawn disc looked like. `assets/vn-harness.svg`
+  is a black circle centred on (12,12) with a 1px transparent margin inside its
+  24px box, so no container can shave it. The check compares the inlined copy's
+  viewBox and circle geometry against that file, so the two cannot drift; the
+  asset lives at the repository root because it is the SOURCE, and no package
+  depends on a file outside itself.
+- **The empty conversation's whale too** (alpha.8): "Into the Unknown" draws the
+  same fish from `conversation.hero.brand.mark`, another `single` slot wrapped in
+  `div[data-slot]`, so it gets the same treatment at 26px - the size that sits on
+  the headline's 32px line without moving it.
 - **The text wears the chat title's type** (alpha.7): the shipped brand name is
   `18px/600`, while the conversation's own title - the current crumb in the strip
   this band is levelled with - is `14px/20px/500` (`.wSkVaW_crumb` +

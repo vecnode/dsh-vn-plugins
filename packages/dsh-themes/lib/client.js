@@ -59,7 +59,7 @@ window.__ModuleLoader__.load({
     /** The slot id of this occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.7'
+    const PLUGIN_VERSION = '0.1.0-alpha.8'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /** The Session header's utilities slot (the group the Open In control sits in). */
@@ -70,6 +70,29 @@ window.__ModuleLoader__.load({
     const HEADER_ORDER = -20
     /** The locale namespace owning this control's copy. */
     const LOCALE_NS = 'themes'
+    /**
+     * The app mark, from `assets/vn-harness.svg` at the pack root: a black circle
+     * centred on (12,12) in its own 24px box, with a 1px transparent margin.
+     *
+     * The margin is the point. The mark is drawn into boxes the app paints with
+     * `overflow:hidden` - the sidebar's brand button is exactly 24px tall - and an
+     * edge-to-edge circle loses a fraction of a pixel on each side there, which is
+     * what alpha.7's disc looked like. The artwork carries the inset instead, so no
+     * container can shave it.
+     *
+     * Inlined as a data URI rather than served: the mark is a few hundred bytes and
+     * this way the branding needs no route, no request and no Node half (the
+     * package's row is a deliberate no-op). The asset file stays the source of
+     * truth, and the tracked check compares this URI's geometry against it so the
+     * two cannot drift.
+     */
+    const MARK_ICON =
+      'data:image/svg+xml,' +
+      encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#000000"/></svg>')
+    /** The empty-conversation hero's mark box, where its whale sits (34x25). */
+    const HERO_MARK_SLOT_CLASS = '.pXSMma_fishHitbox'
+    /** The icon's size in the hero: the headline is 26px on a 32px line. */
+    const HERO_MARK_SIZE = 26
 
     // ---------------------------------------------------------------------
     // Styles - the header's own icon-button dress (28px square, 28px radius,
@@ -401,9 +424,13 @@ window.__ModuleLoader__.load({
         // the disc and the product text are drawn in its place. `!important`
         // because the occupants are React-rendered art this rule must beat.
         'html .hHd-Xa_root .hHd-Xa_brandMark>*,html .hHd-Xa_root .hHd-Xa_brandName>*,html .hHd-Xa_root .hHd-Xa_railMark>*{display:none!important}',
-        // The mark: a plain black disc at the slot's own 24px, in the wide row
-        // and in the collapsed rail (which draws the mark alone).
-        'html .hHd-Xa_root .hHd-Xa_brandMark::before,html .hHd-Xa_root .hHd-Xa_railMark::before{content:"";width:24px;height:24px;border-radius:50%;background:#000;flex:none;display:block}',
+        // The mark: the app icon, in the wide row and in the collapsed rail (which
+        // draws the mark alone). `contain` keeps the artwork's own 1px margin, which
+        // is what stops an exact-fit, `overflow:hidden` container from shaving the
+        // circle's edge.
+        'html .hHd-Xa_root .hHd-Xa_brandMark::before,html .hHd-Xa_root .hHd-Xa_railMark::before{content:"";width:24px;height:24px;flex:none;display:block;background:url("' +
+          MARK_ICON +
+          '") center/contain no-repeat}',
         // The name: the pack's own product text.
         'html .hHd-Xa_root .hHd-Xa_brandName::before{content:"VN Harness"}',
         // ...wearing the CHAT TITLE's type, not the shipped brand name's. The
@@ -413,6 +440,21 @@ window.__ModuleLoader__.load({
         // 18px / 600 in the same 30px strip, so the two read as different sizes a
         // few pixels apart; this makes the product text the title's size.
         'html .hHd-Xa_root .hHd-Xa_brandName{font-size:14px;font-weight:500;line-height:20px;letter-spacing:0}',
+        // The empty conversation's hero - "Into the Unknown" - draws the same whale
+        // from its own `single` slot (`conversation.hero.brand.mark`), wrapped the
+        // same way in `div[data-slot]`. Same treatment: hide whatever the occupant
+        // is (the shipped fish, or the layout's fallback HeroFish) and draw the app
+        // icon in its place, sized to sit on the headline's 32px line.
+        'html ' + HERO_MARK_SLOT_CLASS + '>*{display:none!important}',
+        'html ' +
+          HERO_MARK_SLOT_CLASS +
+          '::before{content:"";width:' +
+          String(HERO_MARK_SIZE) +
+          'px;height:' +
+          String(HERO_MARK_SIZE) +
+          'px;flex:none;display:block;background:url("' +
+          MARK_ICON +
+          '") center/contain no-repeat}',
       ].join('')
       let tag = null
       try {

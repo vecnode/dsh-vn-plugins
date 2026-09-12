@@ -1,4 +1,4 @@
-# dsh-themes (alpha.7)
+# dsh-themes (alpha.8)
 
 **Themes** adds one small control to the DeepSeek Harness web GUI's conversation
 header: a button, the size and dress of the header's other icon buttons, sitting
@@ -151,10 +151,10 @@ html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1
   carries a literal fallback for a profile that never mounts ui-theme, so it gets
   its own tag (`dsh-themes/left-topbar.css`) and needs no `theme/change` refresh.
 
-### The VN branding (alpha.6)
+### The VN branding (alpha.6, icon alpha.8)
 
-The same rule set also replaces what that row *shows*: the product's mark and name
-become a plain **24px black disc** and the text **VN Harness**.
+The same rule set also replaces what that row *shows*: the product's mark becomes
+the **app icon** and its name the text **VN Harness**.
 
 ```css
 /* hide whatever occupies the brand slots, then draw the replacements */
@@ -163,9 +163,15 @@ html .hHd-Xa_root .hHd-Xa_brandName>*,
 html .hHd-Xa_root .hHd-Xa_railMark>*{display:none!important}
 html .hHd-Xa_root .hHd-Xa_brandMark::before,
 html .hHd-Xa_root .hHd-Xa_railMark::before{
-  content:"";width:24px;height:24px;border-radius:50%;background:#000;flex:none;display:block
+  content:"";width:24px;height:24px;flex:none;display:block;
+  background:url("<the icon, inlined>") center/contain no-repeat
 }
 html .hHd-Xa_root .hHd-Xa_brandName::before{content:"VN Harness"}
+/* and the same icon where the empty conversation's whale sits */
+html .pXSMma_fishHitbox>*{display:none!important}
+html .pXSMma_fishHitbox::before{
+  content:"";width:26px;height:26px;background:url("<the icon>") center/contain no-repeat
+}
 ```
 
 - **An override, not a slot registration.** The mark and the name are slots —
@@ -173,28 +179,47 @@ html .hHd-Xa_root .hHd-Xa_brandName::before{content:"VN Harness"}
   shipped `@deepseek-ai/dsh-client-ui-brand-official` row already occupies both.
   Registering our own would be a fight over a one-occupant seat, and the row is
   `aria-hidden` decoration inside the band this package already owns.
+- **The empty conversation's whale too** (alpha.8): "Into the Unknown" draws the
+  same fish from its own single slot, `conversation.hero.brand.mark`, wrapped in
+  `div[data-slot]` exactly like the sidebar's. Same treatment, and the icon is
+  26px so it sits on the headline's 32px line without moving it.
 - **It hides children, not an `<svg>`.** The shipped brand plugin wraps each
   occupant in `<div data-slot="sidebar.brand.mark" style="display: contents">`
   (verified in the running app), so the rule targets the children — which also
   covers the layout's own `FishLogo` fallback, used when no brand plugin is
   mounted at all. `!important` is what beats that inline `display: contents`.
 - **Both rail states.** The collapsed rail draws the mark alone, in its own
-  element (`.hHd-Xa_railMark`), and gets the same disc.
-- **The disc is plain black**, as asked: against the dark theme's sidebar fill it
-  reads as a dark dot. One line here changes it if that is ever wanted.
-- **The text wears the chat title's type** (alpha.7). The shipped brand name is
-  `18px / 600` while the conversation's own title — the current crumb in the header
-  strip this band is levelled with — is `14px / 20px / 500`, so the two read as
-  different sizes a few pixels apart. The product text now takes the title's:
+  element (`.hHd-Xa_railMark`), and gets the same icon.
+- **The icon is `assets/vn-harness.svg`** at the pack root: a black circle centred
+  on (12,12) in a 24px box — with a **1px transparent margin**, which is the fix
+  for alpha.7's "cut" disc. That disc was drawn edge-to-edge inside boxes the app
+  paints with `overflow:hidden` (the sidebar's brand button is exactly 24px tall),
+  where the circle lost a fraction of a pixel on each side. The artwork carries
+  the inset instead, so no container can shave it.
+- **Inlined as a data URI rather than served.** The mark is a few hundred bytes,
+  so inlining costs nothing and the branding needs no route, no request and no
+  Node half (this package's row is a deliberate no-op). `assets/vn-harness.svg`
+  stays the source of truth, and the tracked check compares the inlined copy's
+  viewBox and circle geometry against that file, so the two cannot drift. The
+  asset sits at the repository root because it is the *source*; like the vendored
+  engine in `dsh-terminal`, a package never depends on a file outside itself.
+- **The name wears the chat title's type** (alpha.7): the shipped brand name is
+  `18px/600`, while the conversation's own title — the current crumb in the strip
+  this band is levelled with — is `14px/20px/500`, so the product text takes the
+  title's:
 
   ```css
   html .hHd-Xa_root .hHd-Xa_brandName{font-size:14px;font-weight:500;line-height:20px;letter-spacing:0}
   ```
-- Verified in the running app: the shipped art computes to `display:none`, the disc
-  to `24px × 24px`, `border-radius:50%`, `rgb(0,0,0)`, the name to `"VN Harness"`,
-  and the text to `14px / 20px / 500` — the same numbers the **served**
-  `ui-conversation` bundle declares for `.wSkVaW_crumb` / `.wSkVaW_crumbCurrent`
-  (compared against those bytes directly, not against a copy).
+- **Verified, not assumed.** In the running app the shipped art computes to
+  `display:none`, the sidebar and rail marks draw the icon at `24px × 24px`, the
+  hero draws it at `26px × 26px`, the name reads `"VN Harness"` at
+  `14px/20px/500` — the same numbers the **served** `ui-conversation` bundle
+  declares for its title crumb. The icon's own pixels were checked by drawing the
+  asset to canvases and reading them back: at 24px and 26px the opaque box is
+  exactly square (22×22 and 24×24), the margin is exactly 1px on all four sides,
+  every row and column mirrors, the corners are transparent, and **nothing
+  touches the canvas edge** in any size tested.
 
 ## Where it sits
 
