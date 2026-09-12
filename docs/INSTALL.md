@@ -142,6 +142,12 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   (`install.bat` / `./install.sh`, or `-Force`), then a restart. Greyed out means
   the shipped `@deepseek-ai/dsh-client-ui-theme` service (row `ui-theme`) is not
   in the boot graph — the tooltip says "The theme service is unavailable".
+- **A header icon button has no circle around it** — the group's round hairline
+  ring arrives with `dsh-themes` alpha.9 (its own Themes button) plus that
+  package's one-rule override for the right bar's collapse/expand toggle in the
+  header corner; reinstall (`install.bat` / `./install.sh`, or `-Force`), restart
+  and hard-refresh, and confirm the served `dsh-themes` bundle prints alpha.9 or
+  later.
 - **Code text looks black-on-dark in the light theme** — the editor follows the
   app's appearance; confirm the served `dsh-editor` bundle prints alpha.8 or
   later in a tab's file bar and hard-refresh (Ctrl+F5).
@@ -226,6 +232,16 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   the override is pinned to the sidebar's hashed class names (like the band above
   it). A harness line that renames them matches nothing; the fix is to re-read the
   new names in `dsh-themes/lib/client.js` (`installLeftTopBar`).
+- **No download icon in the header (the three-dot button is still there)** —
+  `dsh-themes` alpha.9 is not in the profile; a plain install run
+  (`install.bat` / `./install.sh`, or `-Force`), a restart and a hard refresh put
+  it there. The button takes the seat the three-dot "more actions" button had
+  (after **Open In…**), so the old button disappearing IS the change.
+- **The download icon is greyed out with "Session export is unavailable"** — the
+  shipped `session-log-download` row (or at least its browser half's
+  `sessionLogDownload` service) is not mounted, and that row owns the export. The
+  pack does not reimplement it: re-enable/mount
+  `@deepseek-ai/dsh-session-log-export` and hard-refresh.
 - **`Ctrl+C` in the terminal copies instead of interrupting** — it must not: a
   bare `Ctrl+C` is SIGINT and the clipboard is `Ctrl+Shift+C` (`Cmd+C` on macOS).
   A single-key difference here is a bug, not a preference.

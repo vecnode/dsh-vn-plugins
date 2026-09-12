@@ -1,10 +1,23 @@
-# dsh-themes (alpha.8)
+# dsh-themes (alpha.9)
 
-**Themes** adds one small control to the DeepSeek Harness web GUI's conversation
-header: a button, the size and dress of the header's other icon buttons, sitting
-immediately **left of the shipped "Open In…" control**. Pressing it opens a menu
-with the three appearances the product already offers — **Light**, **Dark** and
-**System** — and its glyph shows which one is active. Alpha.
+**The pack's conversation-header package.** It owns two controls on that header
+and the appearance overrides that dress it.
+
+**1. Themes** — one small control in the web GUI's conversation header: a button,
+the size and dress of the header's other icon buttons, sitting immediately **left
+of the shipped "Open In…" control**. Pressing it opens a menu with the three
+appearances the product already offers — **Light**, **Dark** and **System** — and
+its glyph shows which one is active.
+
+**2. The Session-log download seat** (alpha.9) — the shipped
+`@deepseek-ai/dsh-session-log-export` browser half put a **three-dot "more
+actions" button** in that same header group whose menu held exactly **one** item,
+"Download session log": one click to open a menu, a second to pick the only thing
+in it. This package takes that seat and draws **one plain download icon button**
+on it — one click and the export starts. The export itself is not reimplemented:
+the shipped row stays mounted and its `sessionLogDownload` controller does the
+work, so the button and the `/export` command stay one implementation. See [The
+Session-log download seat](#the-session-log-download-seat-alpha9).
 
 It also carries the pack's **appearance overrides** — rules that hold one surface
 on a fixed palette or a fixed shape whatever the app theme is. The first is the
@@ -15,8 +28,13 @@ third is the left column's **top bar** (alpha.4): the sidebar's branding row
 becomes the same 76px band, ending in the same hairline, that the middle and right
 columns open with — and, since alpha.6, that row wears the pack's own **VN
 branding** (a 24px black disc and the text *VN Harness*) instead of the shipped
-fish and wordmark. See below. All of them are plain engine-neutral CSS, so they
-hold in whichever browser the Web GUI is opened in.
+fish and wordmark. The fourth (alpha.9) is the **header ring**: the right bar's
+own collapse/expand toggle in the header corner is the one icon button on that bar
+that could not be given the group's round outline where it lives (it belongs to a
+GENERATED forked bundle), so one rule keyed on the header's stable corner marker
+gives it the same ring this package's two header buttons draw themselves. See
+below. All of them are plain engine-neutral CSS, so they hold in whichever browser
+the Web GUI is opened in.
 
 It is a thin control, not a second theme system:
 
@@ -221,6 +239,97 @@ html .pXSMma_fishHitbox::before{
   every row and column mirrors, the corners are transparent, and **nothing
   touches the canvas edge** in any size tested.
 
+## The Session-log download seat (alpha.9)
+
+The shipped `@deepseek-ai/dsh-session-log-export` browser half put a **three-dot
+"more actions" button** into the same header group, and its menu held exactly one
+item: "Download session log". So downloading a session's log was one click to
+open a menu and a second to pick the only thing in it. This package takes that
+seat and draws the download glyph on it directly.
+
+**How the seat is taken — the slot system's own shadowing rule.**
+
+```js
+ctx.slots.register({
+  name: 'conversation.session.header.utilities',
+  id: 'session-log-download',   // the SHIPPED occupant's own id
+  priority: -10,                // the shipped one sits at the default 0
+  order: 0,                     // the shipped position: the button does not move
+  ...
+}, SessionLogDownloadAction)
+```
+
+`conversation.session.header.utilities` is a **list** slot, and a list slot
+renders the **lowest priority** registration for a given occupant `id` and keeps
+one occupant per id — so registering the shipped id one priority lower makes this
+component the rendered one and leaves the shipped registration in the registry,
+unrendered. That is the same rule `dsh-editor` uses to shadow the shipped
+rendered-Markdown body (`key` + a lower `priority`). It matters that this is the
+registry's rule and not CSS:
+
+- no `display:none` on a hashed class, so a harness bump that renames classes
+  cannot resurrect the three-dot button beside this one;
+- no DOM is touched, and nothing shipped is disabled;
+- the seat does not move: it keeps the shipped occupant's `order: 0`.
+
+**What is NOT reimplemented: the export.** The shipped row
+`session-log-download` stays mounted **because** it is dual-face. Its host half
+owns the feature — the authenticated `/api/session.export` stream and the
+`/export` slash command — so disabling that row would take the export away, not
+the button. Its browser half publishes the `sessionLogDownload` controller: one
+export per Session, a HEAD of the export URL, the browser's own download, and
+`downloading` / `success` / `error` state. This control resolves that controller
+lazily (`ctx.get('sessionLogDownload')`) and calls it, so:
+
+- the header button and `/export` are **one implementation with one busy state**
+  (the button also renders disabled while the controller reports `downloading`,
+  so a second click cannot start another export);
+- if the service is absent (a profile that never mounts that row), the button
+  renders **disabled** and says `Session export is unavailable` instead of
+  pretending to work.
+
+**The seat's dialog came with the seat.** The shipped registration was the pair
+`[Menu, Dialog]`, so shadowing the seat takes the export's
+**preparing / success / error** dialog along with the menu. This bundle renders
+that dialog from the same store, with the same three states and the same Close
+button, so `/export` keeps the feedback it always had. What is gone is the
+dropdown; what is left is one button and one dialog.
+
+**The button's dress** is the Themes button's own `.dst-button`: 28×28, `6px`
+padding, a 15px glyph, `border-radius: 28px` and the group's hairline ring. The
+glyph is the shipped `IconDownloadOutline16` — the icon the removed menu item
+carried.
+
+## The header ring (alpha.9)
+
+The conversation header's icon buttons are meant to read as one group, and the
+group's dress is a **round hairline outline**: `28px` square, `border-radius:28px`
+and `.5px solid var(--dsw-alias-border-l3)`, held *inside* the box by
+`box-sizing:border-box`. The terminal control has always worn it; the Session-log
+download seat now does too; this package's own button did not, so it sat bare
+among them. It does now.
+
+The one button on that bar that cannot draw the ring where it lives is the **right
+bar's own collapse/expand toggle** in the header corner — it is the pack's forked
+right bar's button, in a GENERATED bundle that is never hand-edited — so this
+package gives it the ring with one rule:
+
+```css
+html [data-conversation-header-corner] button{
+  border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));
+  border-radius:28px;box-sizing:border-box}
+```
+
+- **A stable hook, not a hashed class.** The corner element carries
+  `data-conversation-header-corner`, the conversation header's own marker in
+  ui-conversation, so this rule survives the class-name churn a harness bump
+  brings (unlike the left-bar band above, which is pinned to hashed names on
+  purpose and documented as such).
+- **`box-sizing` is part of the rule.** The toggle's own dress does not set it, so
+  without it the `.5px` outline would grow the button by half a pixel per side.
+- **The corner is a `single` slot**, so the rule cannot leak onto unrelated
+  controls; it is also installed once — there is no palette in it.
+
 ## Where it sits
 
 The Session header is composed from slots
@@ -231,20 +340,25 @@ occupant of the **utilities** list:
 |---|---|---|
 | **Themes** (this package) | `-20` | first — left of Open In |
 | Open In… (`open-in-app` / the pack's `dsh-open-in-app`) | `-10` | next |
-| Session log download (`session-log-export`) | *(default 0)* | after that |
+| **Session log download** (this package, shadowing the shipped seat) | `0` | after that — was the three-dot button |
+| Terminal (`dsh-terminal`) | `30` | last |
 
 `-20` is the whole placement: the utilities list renders in ascending order, so
 a lower order simply renders further left. Nothing shipped is patched and no
-existing row's order is changed.
+existing row's order is changed. The download seat is the one place this package
+takes OVER an occupant instead of adding one, and it does that by the registry's
+priority rule (same `id`, lower `priority`) rather than by hiding anything.
 
 ## Layout
 
 ```
 cordis.patch.yml   bundle layer: inserts the 'themes' row (nothing else patched)
 lib/index.js       Node half: a no-op row, so the client bundle joins the boot graph
-lib/client.js      Browser half: the header button + menu, the snapshot reader, and
-                   the appearance overrides (the Markdown paper, the Markdown
-                   chrome, and the left column's top bar)
+lib/client.js      Browser half: the Themes button + menu, the Session-log download
+                   seat (same slot, shipped id at a lower priority) with its export
+                   dialog, the theme snapshot reader, and the appearance overrides
+                   (the Markdown paper, the Markdown chrome, the left column's top
+                   bar, and the header ring)
 ```
 
 ## Behaviour worth keeping
@@ -264,6 +378,14 @@ lib/client.js      Browser half: the header button + menu, the snapshot reader, 
 - **Same switch, both surfaces.** Because the write goes through
   `theme.setTheme(id)`, no second copy of the preference (and no second
   persistence path) exists to drift.
+- **The download seat is taken by priority, not by force.** Registering the
+  SHIPPED occupant's `id` one priority lower is what makes this package's
+  component the rendered one; a different `id` would simply have added a second
+  button beside the three-dot one.
+- **The shipped controller is optional and resolved at use time.** Nothing
+  shipped is disabled, and a profile without `sessionLogDownload` degrades to a
+  disabled button reading "Session export is unavailable" — the same rule this
+  package follows for `theme`.
 
 ## Install / uninstall
 

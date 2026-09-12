@@ -14,6 +14,8 @@ The pack targets the harness line DeepSeek ships to the raw web install
 | Master | **`dsh-vn-master`**, deliberately blank - the bundle layer plus one no-op `master` row; no client half, no service, no inject edge and no core-row disables |
 | Right bar | **owned by the pack** - `dsh-rightbar` / `dsh-rightbar-files` are forks of `@deepseek-ai/dsh-client-ui-sidebar-right` / `-sidebar-files`, and the core rows `ui-sidebar-right` / `ui-sidebar-files` are disabled |
 | Open In file managers | **owned by the pack** - `dsh-open-in-app` forks `@deepseek-ai/dsh-client-ui-open-in-app` (row `ui-open-in-app` disabled) and launches the OS file browser directly |
+| Session log download | **the seat is the pack's** - `dsh-themes` alpha.9 shadows the shipped header seat (same occupant id, `priority: -10`), so a plain download icon replaces the three-dot button; the shipped `session-log-download` row stays **mounted** for `/api/session.export`, the `/export` command and the `sessionLogDownload` controller the button drives (no row disabled, nothing forked, no new package) |
+| Header icon rings | the header's icon buttons all wear the same `.5px` round outline: the pack's own controls draw it themselves and `dsh-themes` adds one rule for the right bar's toggle in the header corner (keyed on the stable `data-conversation-header-corner` marker) |
 
 ## What this means for the plugin
 
@@ -96,10 +98,30 @@ The pack targets the harness line DeepSeek ships to the raw web install
   pack's appearance overrides: the **Markdown paper**, one rule that re-declares
   ui-theme's own light declarations on the shipped preview's
   `[data-document-markdown]` root, so the rendered Markdown view stays white in
-  the dark theme, and the **Markdown chrome**, one static rule that hides the
+  the dark theme, the **Markdown chrome**, one static rule that hides the
   preview header's viewer menu on Markdown tabs (the page has exactly one
-  renderer; the editor's **Edit** button is the way back). On the pack's own
-  **left top bar** it also replaces the branding: the shipped mark and wordmark
+  renderer; the editor's **Edit** button is the way back), and - since alpha.9 -
+  the **header ring**, one rule that gives the right bar's own collapse/expand
+  toggle in the header corner the same `.5px` round outline every other icon
+  button on that bar wears (that button belongs to a GENERATED forked bundle, so
+  it cannot draw the ring where it lives; the rule keys on the header's stable
+  `data-conversation-header-corner` marker, never a hashed class). Since alpha.9
+  the same package also owns the header's **Session-log download seat**: the
+  shipped `@deepseek-ai/dsh-session-log-export` browser half put a three-dot "more
+  actions" button there whose menu held exactly one item ("Download session log"),
+  and the pack registers the **same occupant id** (`session-log-download`) at
+  `priority: -10` in that list slot - a list slot renders the **lowest priority**
+  registration for an id, the slot system's own shadowing rule - so the ellipsis
+  stops rendering and a plain download icon button takes the seat, with no CSS
+  hiding and no DOM poking. The seat keeps its `order: 0` (it does not move), and
+  its preparing/success/error dialog is drawn from the same store, so `/export`
+  keeps its feedback. The **export is not reimplemented**: the shipped row stays
+  mounted because its host half owns `/api/session.export` and the `/export`
+  command, and this control drives the controller its browser half publishes
+  (`sessionLogDownload`, resolved lazily with `ctx.get`). Nothing is forked, no
+  core row is disabled and no new package was added; a profile without that
+  service shows a disabled button instead of a broken one. On the pack's
+  own **left top bar** it also replaces the branding: the shipped mark and wordmark
   (they are `single`-slot occupants filled by the harness's `brand-official` row,
   with the layout's own fish as fallback) are hidden and redrawn as a plain
   **24px black disc** and the text **VN Harness**, in the wide row and in the
@@ -306,6 +328,24 @@ The pack targets the harness line DeepSeek ships to the raw web install
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the
   browser.
+
+- **themes alpha.9**: the middle panel's top bar loses the shipped three-dot
+  "more actions" button (whose only menu item was "Download session log") and
+  gains a **download icon button** in the same seat that starts the export on the
+  first click. `dsh-themes` registers the SHIPPED seat id (`session-log-download`)
+  at `priority: -10`, so the list slot's own shadowing rule (lowest renders) makes
+  its component the one that draws - no CSS hiding, no DOM poking, no disabled
+  core row and no new package: the shipped `session-log-download` row stays
+  mounted because it owns `/api/session.export`, the `/export` command and the
+  `sessionLogDownload` controller this button drives (the seat's dialog included,
+  so `/export` keeps its feedback). The same alpha gives every icon button on that
+  bar the SAME round `.5px` hairline ring: the Themes button and the new download
+  button draw it themselves (the terminal control already had it), and one
+  override rule gives it to the right bar's own toggle in the header corner,
+  keyed on the header's stable `data-conversation-header-corner` marker (that
+  button lives in a GENERATED forked bundle and could not draw it where it lives).
+  No new packages: an install run with `-Force` (or a plain one, since the version
+  changed) plus a restart and a hard refresh is enough.
 
 ## Alpha policy
 

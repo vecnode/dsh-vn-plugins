@@ -1,4 +1,4 @@
-// check-client-bundles.mjs - load the pack's browser bundles the way the shell
+﻿// check-client-bundles.mjs - load the pack's browser bundles the way the shell
 // does (module table + factory) and drive them with a REAL React runtime.
 //
 // Why this exists: the client halves have no build step and no type checker, so
@@ -135,14 +135,25 @@ function loadBundle(relative, extraRequire) {
       const Child = (props) => (props && props.children !== undefined ? props.children : null)
       // MarkdownText renders its text: the editor's rendered-view body draws it.
       const Text = (props) => props.text
+      // Modal renders nothing while closed and its title / description / body /
+      // footer when open, like the real one (which portals to document.body).
+      const Dialog = (props) => {
+        if (!props || props.open !== true) return null
+        return React.createElement(React.Fragment, null, props.title, props.description, props.children, props.footer)
+      }
+      // Button renders its children, so a footer's label reaches the markup.
+      const Push = (props) => (props && props.children !== undefined ? props.children : null)
       return {
         Menu: Anchor,
         Tooltip: Child,
         MarkdownText: Text,
+        Modal: Dialog,
+        Button: Push,
         IconChevronDownOutline14: Null,
         IconLightOutline16: Null,
         IconDarkOutline16: Null,
         IconFollowsystemOutline16: Null,
+        IconDownloadOutline16: Null,
       }
     }
     throw new Error('unexpected require in a client bundle: ' + name)
@@ -396,10 +407,25 @@ const themeService = {
   },
 }
 const themeEvents = []
+// The package registers TWO occupants of the same list slot (the Themes control
+// and the Session-log download seat), so the stand-in keys by slot#id.
 const themesSeats = {}
 const themeLocales = {}
+// A stand-in for the shipped export controller's store - the shape the renderer
+// binds a selector Hook from (`getSnapshot` / `subscribe`).
+let logEntry = undefined
+const logStore = {
+  getSnapshot: () => ({ bySession: { s1: logEntry } }),
+  subscribe: () => () => {},
+}
+const downloadCalls = []
+const logController = {
+  store: logStore,
+  download: (sessionId) => downloadCalls.push(sessionId),
+  dismiss: () => {},
+}
 themes.exports.apply({
-  get: (name) => (name === 'theme' ? themeService : undefined),
+  get: (name) => (name === 'theme' ? themeService : name === 'sessionLogDownload' ? logController : undefined),
   on: (event, listener) => {
     if (event === 'theme/change') themeEvents.push(listener)
     return () => {}
@@ -407,7 +433,7 @@ themes.exports.apply({
   slots: {
     inject: (name, fn) => fn(),
     register(spec, component) {
-      themesSeats[spec.name] = { spec, component }
+      themesSeats[spec.name + '#' + spec.id] = { spec, component }
       return () => {}
     },
   },
@@ -420,8 +446,12 @@ themes.exports.apply({
   effect: (fn) => fn(),
   logger: { debug() {}, warn() {} },
 })
-check('themes header seat', Object.keys(themesSeats).join(','), 'conversation.session.header.utilities')
-const themesSpec = themesSeats['conversation.session.header.utilities'].spec
+check(
+  'themes header seats',
+  Object.keys(themesSeats).join(','),
+  'conversation.session.header.utilities#dsh-themes,conversation.session.header.utilities#session-log-download',
+)
+const themesSpec = themesSeats['conversation.session.header.utilities#dsh-themes'].spec
 check('themes seat id', themesSpec.id, 'dsh-themes')
 check('themes sits left of Open In', themesSpec.order < -10, true)
 check('themes dictionaries', Object.keys(themeLocales).join(','), 'themes')
@@ -434,12 +464,22 @@ const themesCopy = {
   'theme.system': 'System',
   'theme.current': 'Theme: {name}',
   'theme.unavailable': 'The theme service is unavailable',
+  'download.title': 'Download session log',
+  'download.busy': 'Preparing the session archive',
+  'download.unavailable': 'Session export is unavailable',
+  'download.preparingTitle': 'Exporting Session',
+  'download.preparingDescription': 'Preparing a ZIP containing this Session, its sub-Sessions, and attachments.',
+  'download.successTitle': 'Session download started',
+  'download.successDescription': 'The browser is downloading the Session ZIP.',
+  'download.errorTitle': 'Session export failed',
+  'download.close': 'Close',
+  'download.commandFailed': 'Could not start the Session export.',
 }
 const themesT = (key, vars) => {
   const text = themesCopy[key] === undefined ? key : themesCopy[key]
   return vars ? text.replace(/\{(\w+)\}/g, (match, name) => String(vars[name] === undefined ? '' : vars[name])) : text
 }
-const ThemesAction = themesSeats['conversation.session.header.utilities'].component
+const ThemesAction = themesSeats['conversation.session.header.utilities#dsh-themes'].component
 const themesMarkup = renderToStaticMarkup(h(ThemesAction, { t: themesT, themeState: themesFacade.themeState }))
 // The server snapshot is the product default (`system`); the live snapshot the
 // button paints in the browser is the service's own ('dark' above).
@@ -450,6 +490,62 @@ check('themes writes through the service', themeWrites.join(','), 'light')
 check('themes adopts the written value', themesFacade.themeState.getSnapshot().preference, 'light')
 for (const listener of themeEvents) listener({ preference: 'system', active: { id: 'system', colorScheme: 'dark' }, revision: 9 })
 check('themes follows theme/change', themesFacade.themeState.getSnapshot().preference, 'system')
+// The dictionaries really carry the download copy (the renders below use the
+// registered English dictionary, so this is what the app would show).
+check('download copy is registered', themeLocales.themes.en['download.title'], 'Download session log')
+check('download dialog copy is registered', themeLocales.themes.en['download.errorTitle'], 'Session export failed')
+
+// ------------------------------------------- the Session-log download seat
+// The shipped browser half put a three-dot "more actions" button in this same
+// header slot whose only menu item was the download. The package's second
+// occupant registers the SHIPPED seat id one priority lower (`lowest renders` in
+// a list slot), so the ellipsis stops rendering and one download icon button
+// takes the seat; the export itself stays the shipped controller's job.
+const downloadSpec = themesSeats['conversation.session.header.utilities#session-log-download'].spec
+check('download seat shadows the shipped id', downloadSpec.id, 'session-log-download')
+check('download seat renders below the shipped one', downloadSpec.priority < 0, true)
+check('download seat keeps the shipped order', downloadSpec.order, 0)
+const downloadFacade = downloadSpec.inject()
+check('download seat follows the shipped store', downloadFacade.hooks.sessionLogDownload === logStore, true)
+check('download seat reached the shipped controller', downloadFacade.available, true)
+downloadFacade.request('s1')
+check('download seat downloads on request', downloadCalls.join(','), 's1')
+const DownloadAction = themesSeats['conversation.session.header.utilities#session-log-download'].component
+// A renderer-bound stand-in for the Hook the host builds out of the inject face.
+const useLog = (selector) => selector(downloadFacade.hooks.sessionLogDownload.getSnapshot())
+const renderSeat = () =>
+  renderToStaticMarkup(
+    h(DownloadAction, {
+      sessionId: 's1',
+      t: themesT,
+      request: downloadFacade.request,
+      dismiss: downloadFacade.dismiss,
+      available: true,
+      useSessionLogDownload: useLog,
+    }),
+  )
+const seatMarkup = renderSeat()
+check(
+  'download seat renders one download button',
+  seatMarkup.includes('class="dst-button"') &&
+    seatMarkup.includes('data-dsh-session-log-download') &&
+    seatMarkup.includes('aria-label="Download session log"'),
+)
+check('download seat renders no ellipsis', seatMarkup.includes('aria-haspopup="menu"'), false)
+check('download seat is enabled while idle', seatMarkup.includes('disabled'), false)
+check('download seat is not busy while idle', seatMarkup.includes('aria-busy="false"'))
+check('download seat draws no dialog while idle', seatMarkup.includes('Exporting Session'), false)
+// The state machine is the shipped controller's: `downloading` disables the
+// button, and the seat's own dialog describes the state.
+logEntry = { open: true, status: 'downloading', error: null }
+const busySeat = renderSeat()
+check('download seat reports the export in flight', busySeat.includes('aria-busy="true"') && busySeat.includes('disabled'))
+check('download seat draws the shipped dialog', busySeat.includes('Exporting Session'))
+logEntry = { open: true, status: 'success', error: null }
+check('download seat draws the success state', renderSeat().includes('Session download started'))
+logEntry = { open: true, status: 'error', error: 'HTTP 500' }
+check('download seat draws the error state', renderSeat().includes('HTTP 500'))
+logEntry = undefined
 
 // A profile that never mounts ui-theme: the control still renders (disabled,
 // with its own copy) instead of taking the header down.
@@ -460,7 +556,7 @@ themes.exports.apply({
   slots: {
     inject: (name, fn) => fn(),
     register(spec, component) {
-      bareSeats[spec.name] = { spec, component }
+      bareSeats[spec.name + '#' + spec.id] = { spec, component }
       return () => {}
     },
   },
@@ -468,8 +564,8 @@ themes.exports.apply({
   effect: (fn) => fn(),
   logger: { debug() {}, warn() {} },
 })
-const bareState = bareSeats['conversation.session.header.utilities'].spec.inject().themeState
-const bareMarkup = renderToStaticMarkup(h(bareSeats['conversation.session.header.utilities'].component, { t: themesT, themeState: bareState }))
+const bareState = bareSeats['conversation.session.header.utilities#dsh-themes'].spec.inject().themeState
+const bareMarkup = renderToStaticMarkup(h(bareSeats['conversation.session.header.utilities#dsh-themes'].component, { t: themesT, themeState: bareState }))
 check('themes survives a missing service', bareMarkup.includes('disabled') && bareMarkup.includes('aria-haspopup="menu"'))
 check('themes reports the missing service', bareMarkup.includes('The theme service is unavailable'))
 let refused = false
@@ -479,6 +575,30 @@ try {
   refused = true
 }
 check('themes refuses to write without the service', refused)
+// A profile without the shipped export row: the button says so instead of
+// pretending, and the Hook still reads a real (constant) source.
+const bareDownload = bareSeats['conversation.session.header.utilities#session-log-download'].spec.inject()
+check('download seat reports a missing export service', bareDownload.available, false)
+check('download seat survives a missing service', typeof bareDownload.hooks.sessionLogDownload.subscribe, 'function')
+let bareThrew = false
+try {
+  bareDownload.request('s1')
+} catch (err) {
+  bareThrew = true
+}
+check('download seat requests nothing without the service', bareThrew, false)
+const bareSeatMarkup = renderToStaticMarkup(
+  h(bareSeats['conversation.session.header.utilities#session-log-download'].component, {
+    sessionId: 's1',
+    t: themesT,
+    request: bareDownload.request,
+    dismiss: bareDownload.dismiss,
+    available: false,
+    useSessionLogDownload: (selector) => selector(bareDownload.hooks.sessionLogDownload.getSnapshot()),
+  }),
+)
+check('download seat disables the button without the service', bareSeatMarkup.includes('disabled'))
+check('download seat says the export is unavailable', bareSeatMarkup.includes('Session export is unavailable'))
 
 // The Markdown paper: it copies ui-theme's own LIGHT declarations onto the
 // rendered Markdown root. Fake stylesheets in the shape the CSSOM exposes.
@@ -604,6 +724,26 @@ check(
   topBar.includes('.hHd-Xa_brandName{font-size:14px;font-weight:500;line-height:20px;letter-spacing:0}'),
 )
 check('branding covers the collapsed rail too', topBar.includes('.hHd-Xa_railMark::before'))
+
+// alpha.9: the header's icon-button RING. The pack's own header buttons draw it
+// themselves, so this package's copy is pinned here; the shipped right-bar toggle
+// in the header corner cannot (it lives in a GENERATED fork), so one rule keyed
+// on the header's stable corner marker gives it the same outline. The marker is
+// asserted to be a `data-` attribute rather than the hashed class names the top
+// bar above is pinned to on purpose.
+const themesCssTag = themes.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-themes/themes.css').pop()
+const themesCss = themesCssTag ? themesCssTag.textContent : ''
+check(
+  'theme button wears the header ring',
+  themesCss.includes('.dst-button{width:28px;height:28px;box-sizing:border-box;') &&
+    themesCss.includes('border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:28px'),
+)
+const ringTag = themes.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-themes/header-ring.css').pop()
+const headerRing = ringTag ? ringTag.textContent : ''
+check('header ring rule injected', headerRing.includes('html [data-conversation-header-corner] button{'))
+check('header ring uses the same hairline', headerRing.includes('border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3))'))
+check('header ring keeps the box 28px', headerRing.includes('border-radius:28px;box-sizing:border-box'))
+check('header ring keys on a stable marker', headerRing.includes('_root') === false && headerRing.includes('.P3OORG_') === false)
 
 // --------------------------------------------------------------- dsh-gittree
 const gitTree = loadBundle('packages/dsh-gittree/lib/client.js', {})

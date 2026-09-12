@@ -1,27 +1,45 @@
 /**
- * dsh-themes - browser half.
+ * dsh-themes - browser half: the pack's CONVERSATION HEADER package.
  *
- * One small control in the conversation header: a button, the same size and
- * dress as the header's other icon buttons, sitting immediately LEFT of the
- * shipped "Open In..." control (both live in the Session header's
- * `conversation.session.header.utilities` list; Open In registers at order -10,
- * this one at -20). Pressing it opens a menu with the three appearances the
- * product already offers - Light, Dark, System - exactly the choice Settings >
- * General > Appearance presents, and the button's glyph shows which one is
- * active.
+ * It owns two controls on that header and the appearance overrides that go with
+ * them.
  *
- * The preference itself is NOT owned here. `@deepseek-ai/dsh-client-ui-theme`
- * owns it (`theme` client service): it persists the choice in the `ui-theme`
- * settings namespace, resolves `system` through `prefers-color-scheme`, and
- * ui-layout applies each snapshot to the document (`body[data-ds-dark-theme]`,
- * the `--dsw-*` tokens). This bundle only reads the published snapshot and
- * calls `setTheme(id)`, so the header control and the Settings row are the same
- * switch, and a change made in either place lands in the other.
+ * 1. THE THEMES CONTROL. One small button, the same size and dress as the
+ *    header's other icon buttons, sitting immediately LEFT of the shipped
+ *    "Open In..." control (both live in the Session header's
+ *    `conversation.session.header.utilities` list; Open In registers at order -10,
+ *    this one at -20). Pressing it opens a menu with the three appearances the
+ *    product already offers - Light, Dark, System - exactly the choice Settings >
+ *    General > Appearance presents, and the button's glyph shows which one is
+ *    active.
  *
- * The service is resolved lazily (`ctx.get('theme')`), never declared in the
- * editor-style hard dependency list: a profile that never mounts ui-theme keeps
- * its header intact, and this control simply reports that the theme service is
- * unavailable instead of taking another plugin's activation down with it.
+ *    The preference itself is NOT owned here. `@deepseek-ai/dsh-client-ui-theme`
+ *    owns it (`theme` client service): it persists the choice in the `ui-theme`
+ *    settings namespace, resolves `system` through `prefers-color-scheme`, and
+ *    ui-layout applies each snapshot to the document (`body[data-ds-dark-theme]`,
+ *    the `--dsw-*` tokens). This bundle only reads the published snapshot and
+ *    calls `setTheme(id)`, so the header control and the Settings row are the same
+ *    switch, and a change made in either place lands in the other.
+ *
+ *    The service is resolved lazily (`ctx.get('theme')`), never declared in the
+ *    editor-style hard dependency list: a profile that never mounts ui-theme keeps
+ *    its header intact, and this control simply reports that the theme service is
+ *    unavailable instead of taking another plugin's activation down with it.
+ *
+ * 2. THE SESSION-LOG DOWNLOAD SEAT (alpha.9). The shipped
+ *    `@deepseek-ai/dsh-session-log-export` browser half put a three-dot "more
+ *    actions" button into that same utilities list whose menu held exactly ONE
+ *    item, "Download session log" - one click to open a menu, a second to pick
+ *    the only thing in it. This bundle registers the SHIPPED occupant's id at a
+ *    LOWER slot priority, which is a list slot's own shadowing rule (`lowest
+ *    renders`), so the seat draws one plain download icon button that starts the
+ *    export on the first click. The export is NOT reimplemented: the shipped row
+ *    stays mounted (it owns the host half - `/api/session.export` and the
+ *    `/export` command) and this control calls the controller its browser half
+ *    publishes, so the button and `/export` share one implementation and one busy
+ *    state. The seat's preparing/success/error dialog is rendered here from that
+ *    same store, so `/export` keeps its feedback. See the download seat section
+ *    below.
  *
  * It also carries the pack's appearance OVERRIDES - rules that hold one surface
  * on a fixed palette regardless of the app theme, or give a core surface the
@@ -35,8 +53,13 @@
  * to the editable surface is the editor's own **Edit** button on the page). The
  * third (alpha.4) is the left column's **top bar**: the sidebar's branding row
  * becomes the same 76px band, ending in the same hairline, that the middle and
- * right columns already open with (see the top bar section below). All three are
- * plain engine-neutral CSS, so they hold in every browser the Web GUI runs in.
+ * right columns already open with (see the top bar section below). The fourth
+ * (alpha.9) is the **header ring**: the right bar's own collapse/expand toggle in
+ * the header corner is the one icon button on that bar that could not be given
+ * the group's round outline where it lives (it belongs to a GENERATED forked
+ * bundle), so one rule keyed on the header's stable corner marker gives it the
+ * same ring this package's two header buttons draw themselves. All four are plain
+ * engine-neutral CSS, so they hold in every browser the Web GUI runs in.
  *
  * Module-table format of every core client package; no build step.
  */
@@ -51,15 +74,17 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
-    const { Menu, Tooltip } = primitives
+    const { Button, Menu, Modal, Tooltip } = primitives
+    /** The shipped download glyph the removed Session-log menu item carried. */
+    const DownloadGlyph = primitives.IconDownloadOutline16
 
     // ---------------------------------------------------------------------
     // Constants
     // ---------------------------------------------------------------------
-    /** The slot id of this occupant in the header utilities list. */
+    /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.8'
+    const PLUGIN_VERSION = '0.1.0-alpha.9'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /** The Session header's utilities slot (the group the Open In control sits in). */
@@ -68,8 +93,25 @@ window.__ModuleLoader__.load({
     const OPEN_IN_APP_ORDER = -10
     /** This control's order: below Open In's, so the list renders it first. */
     const HEADER_ORDER = -20
-    /** The locale namespace owning this control's copy. */
+    /** The locale namespace owning every control's copy in this package. */
     const LOCALE_NS = 'themes'
+    /**
+     * The Session-log download seat (alpha.9): the SHIPPED occupant's own id. A
+     * list slot renders one occupant per id - the lowest priority registration -
+     * so sharing the id with the shipped three-dot button is exactly what makes
+     * this package's download button the rendered one.
+     */
+    const DOWNLOAD_SEAT_ID = 'session-log-download'
+    /** The seat's order (the shipped occupant's own), so the button does not move. */
+    const DOWNLOAD_SEAT_ORDER = 0
+    /** One below the shipped occupant's default `0`: lower renders, so this one wins. */
+    const DOWNLOAD_SEAT_PRIORITY = -10
+    /**
+     * The shipped client service that owns the export
+     * (`@deepseek-ai/dsh-session-log-export`'s browser half:
+     * `download(sessionId)` / `dismiss(sessionId)` / `.store`).
+     */
+    const DOWNLOAD_SERVICE = 'sessionLogDownload'
     /**
      * The app mark, from `assets/vn-harness.svg` at the pack root: a black circle
      * centred on (12,12) in its own 24px box, with a 1px transparent margin.
@@ -96,14 +138,23 @@ window.__ModuleLoader__.load({
 
     // ---------------------------------------------------------------------
     // Styles - the header's own icon-button dress (28px square, 28px radius,
-    // 6px padding, a 15px glyph), so this control is the size of the ones
-    // beside it in both appearances.
+    // 6px padding, a 15px glyph), so the controls in this package are the size
+    // of the ones beside them in both appearances. Both of them share the class.
+    //
+    // alpha.9 adds the hairline RING. The bar's icon buttons are meant to read
+    // as one group, and the pack's terminal control (`.dst-btn`, which is also
+    // the dress the shipped `session-log-download` more-button and the bar's own
+    // toggle were cut from) wears a `.5px` outline; this package's buttons wore
+    // none, so they sat bare among them. The ring is `--dsw-alias-border-l3` -
+    // the token the terminal control already uses - and `box-sizing:border-box`
+    // keeps the box exactly 28px with the outline inside it.
     // ---------------------------------------------------------------------
     const css = `
 .dst-slot{display:inline-flex;align-items:center}
-.dst-button{width:28px;height:28px;box-sizing:border-box;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:0;border-radius:28px;flex:none;justify-content:center;align-items:center;padding:6px;display:inline-flex}
+.dst-button{width:28px;height:28px;box-sizing:border-box;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:28px;flex:none;justify-content:center;align-items:center;padding:6px;display:inline-flex}
 .dst-button svg{width:15px;height:15px}
-.dst-button:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dst-button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.dst-button:disabled{cursor:default;opacity:.5}
 .dst-button:focus-visible{outline:.5px solid var(--dsw-alias-state-accent,#4f8cff);outline-offset:1px}
 `
     const CSS_TAG = 'dsh-themes/themes.css'
@@ -128,6 +179,16 @@ window.__ModuleLoader__.load({
       'theme.current': '主题：{name}',
       'theme.menu': '选择应用主题',
       'theme.unavailable': '主题服务不可用',
+      'download.title': '下载 Session 日志',
+      'download.busy': '正在准备 Session 压缩包',
+      'download.unavailable': 'Session 导出不可用',
+      'download.preparingTitle': '正在导出 Session',
+      'download.preparingDescription': '正在准备包含当前 Session、子 Session 和附件的 ZIP 文件。',
+      'download.successTitle': 'Session 导出已开始下载',
+      'download.successDescription': '浏览器正在下载 Session ZIP 文件。',
+      'download.errorTitle': 'Session 导出失败',
+      'download.close': '关闭',
+      'download.commandFailed': '无法启动 Session 导出。',
     }
     /** English dictionary, key-identical to the Chinese source of truth. */
     const en = {
@@ -138,6 +199,16 @@ window.__ModuleLoader__.load({
       'theme.current': 'Theme: {name}',
       'theme.menu': 'Choose the app theme',
       'theme.unavailable': 'The theme service is unavailable',
+      'download.title': 'Download session log',
+      'download.busy': 'Preparing the session archive',
+      'download.unavailable': 'Session export is unavailable',
+      'download.preparingTitle': 'Exporting Session',
+      'download.preparingDescription': 'Preparing a ZIP containing this Session, its sub-Sessions, and attachments.',
+      'download.successTitle': 'Session download started',
+      'download.successDescription': 'The browser is downloading the Session ZIP.',
+      'download.errorTitle': 'Session export failed',
+      'download.close': 'Close',
+      'download.commandFailed': 'Could not start the Session export.',
     }
 
     /** The three preferences ui-theme owns, in the Settings row's order. */
@@ -473,6 +544,56 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
+    // The header's icon-button RING (alpha.9).
+    //
+    // The conversation header's icon buttons read as one group, and the pack's
+    // own controls draw that group's dress themselves: the terminal control
+    // (`.dst-btn`) wears a `.5px` round outline, the Themes control now wears the
+    // same one, and the Session-log download seat does too. The ONE control on
+    // that bar that could not be given it where it lives is the right bar's own
+    // collapse/expand toggle in the header corner: it is the pack's forked right
+    // bar's button (a GENERATED bundle), and its shipped dress is a bare 28px
+    // disc with no outline. Rather than edit a generated file, this one rule
+    // gives it the same ring.
+    //
+    // The selector is the conversation header's own STABLE marker - the corner
+    // element carries `data-conversation-header-corner` (ui-conversation), not a
+    // hashed class - so it survives a class-name churn on a harness bump. The
+    // corner is a `single` slot, so this cannot leak onto other controls by
+    // accident; `box-sizing:border-box` keeps the box exactly 28px, which matters
+    // because the toggle's own rule does not set it.
+    //
+    // Static CSS with no palette dependency beyond the border token, which
+    // carries a literal fallback - like the top bar above, it is installed once.
+    // ---------------------------------------------------------------------
+    /** The header ring override's style-tag identity (idempotent injection). */
+    const RING_TAG = 'dsh-themes/header-ring.css'
+
+    /**
+     * Install the header icon-button ring override (alpha.9).
+     * @returns whether the rule is in place.
+     */
+    function installHeaderRing() {
+      if (typeof document === 'undefined') return false
+      const ring =
+        'html [data-conversation-header-corner] button{border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:28px;box-sizing:border-box}'
+      let tag = null
+      try {
+        tag = document.querySelector('style[data-plugin-css=' + JSON.stringify(RING_TAG) + ']')
+      } catch (e) {
+        tag = null
+      }
+      if (!tag) {
+        tag = document.createElement('style')
+        tag.dataset.plugin = 'dsh-themes'
+        tag.dataset.pluginCss = RING_TAG
+        document.head.appendChild(tag)
+      }
+      if (tag.textContent !== ring) tag.textContent = ring
+      return true
+    }
+
+    // ---------------------------------------------------------------------
     // The theme snapshot as a `useSyncExternalStore` source: the service's own
     // snapshot object (stable until it changes) with a fallback, refreshed by
     // the service's `theme/change` event and once more after boot, in case
@@ -632,6 +753,159 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
+    // The Session-log download seat (alpha.9).
+    //
+    // The shipped `@deepseek-ai/dsh-session-log-export` browser half put a
+    // three-dot "more actions" button into this same utilities list whose menu
+    // held exactly ONE item, "Download session log" - one click to open a menu, a
+    // second to pick the only thing in it. This package takes the seat and draws
+    // the download glyph on it: one click, and the export starts.
+    //
+    // HOW THE SEAT IS TAKEN. `conversation.session.header.utilities` is a LIST
+    // slot, and a list slot renders the LOWEST priority registration for a given
+    // occupant `id` (the slot system's own shadowing rule - the same one
+    // dsh-editor uses for the rendered Markdown body). Registering the SHIPPED
+    // occupant's id at `priority: -10`, one below its default `0`, therefore makes
+    // this component the rendered one and leaves the shipped registration in the
+    // registry, unrendered. Nothing is hidden with CSS, nothing shipped is
+    // disabled and no DOM is touched.
+    //
+    // WHY THE SHIPPED ROW STAYS MOUNTED. The export is NOT reimplemented here. The
+    // shipped row is dual-face: its HOST half owns the authenticated
+    // `/api/session.export` stream and the `/export` slash command, and its
+    // browser half publishes the `sessionLogDownload` controller - a
+    // one-export-per-Session state machine that HEADs the export URL, hands the
+    // browser its own download, and publishes preparing / success / error state.
+    // This control resolves that controller lazily and calls it, so the header
+    // button and `/export` stay ONE implementation with ONE busy state; a profile
+    // without the service renders the button disabled rather than pretending.
+    //
+    // THE FEEDBACK IS PART OF THE SEAT. The shipped seat also rendered the
+    // export's preparing / success / error dialog, and shadowing the seat takes
+    // that dialog with it - so it is rendered here, from the same store, with the
+    // same three states and a Close button. `/export` keeps the feedback it always
+    // had; what is gone is the dropdown.
+    // ---------------------------------------------------------------------
+    /**
+     * The source the busy hook reads while the shipped controller is absent. A
+     * constant observable with no snapshot: the renderer binds the Hook from the
+     * inject face, so it must always be a source (never `undefined`) to keep the
+     * component's Hook call order stable.
+     */
+    const ABSENT_SOURCE = {
+      getSnapshot: () => undefined,
+      subscribe: () => () => {},
+    }
+
+    /**
+     * @param ctx - the owning client context.
+     * @returns the shipped export controller, or `null` when it is not mounted.
+     */
+    function resolveDownloadController(ctx) {
+      try {
+        const service = typeof ctx.get === 'function' ? ctx.get(DOWNLOAD_SERVICE) : undefined
+        return service !== undefined && service !== null && typeof service.download === 'function' ? service : null
+      } catch (e) {
+        return null
+      }
+    }
+
+    /** The observable source the busy state is read from (never `undefined`). */
+    function downloadSourceOf(controller) {
+      const store = controller === null ? undefined : controller.store
+      return store !== undefined && store !== null && typeof store.getSnapshot === 'function' ? store : ABSENT_SOURCE
+    }
+
+    /**
+     * The dialog the seat owns: the shipped export's own feedback, drawn from the
+     * same store the shipped seat read (`preparing` / `success` / `error`,
+     * dismissed by the Close button and by the mask).
+     * @param props - Session id, bound store hook, dismiss action, and copy.
+     * @returns the modal contribution (nothing while the Session is idle).
+     */
+    function ExportDialog(props) {
+      const { sessionId, t, dismiss, useSessionLogDownload } = props
+      const entry = useSessionLogDownload((state) => (state === undefined || state === null ? undefined : state.bySession[String(sessionId)]))
+      const open = entry !== undefined && entry !== null && entry.open === true
+      const status = entry === undefined || entry === null ? undefined : entry.status
+      const title =
+        status === 'downloading'
+          ? t('download.preparingTitle')
+          : status === 'success'
+            ? t('download.successTitle')
+            : t('download.errorTitle')
+      const description =
+        status === 'downloading'
+          ? t('download.preparingDescription')
+          : status === 'success'
+            ? t('download.successDescription')
+            : (entry !== undefined && entry !== null && entry.error) || t('download.commandFailed')
+      return h(Modal, {
+        open: open,
+        onClose: () => {
+          dismiss(sessionId)
+        },
+        title: title,
+        description: description,
+        closeLabel: t('download.close'),
+        footer: h(
+          Button,
+          {
+            variant: 'primary',
+            onClick: () => {
+              dismiss(sessionId)
+            },
+          },
+          t('download.close'),
+        ),
+      })
+    }
+
+    /**
+     * The download icon button: one click exports, with no menu and no second
+     * gesture. Its busy state is the shipped controller's own, so a second click
+     * during an export cannot start another one.
+     * @param props - Session id, bound store hook, request/dismiss, and copy.
+     * @returns the header seat: the button plus the seat's own dialog.
+     */
+    function SessionLogDownloadAction(props) {
+      const { sessionId, t, request, dismiss, available, useSessionLogDownload } = props
+      const entry = useSessionLogDownload((state) => (state === undefined || state === null ? undefined : state.bySession[String(sessionId)]))
+      const busy = entry !== undefined && entry !== null && entry.status === 'downloading'
+      const ready = available === true
+      const enabled = ready && !busy
+      const label = ready === false ? t('download.unavailable') : busy ? t('download.busy') : t('download.title')
+      return h(
+        React.Fragment,
+        null,
+        h(
+          Tooltip,
+          { label: label, side: 'bottom', delayMs: 500 },
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'dst-button',
+              'data-dsh-session-log-download': '',
+              'aria-label': t('download.title'),
+              'aria-busy': busy ? 'true' : 'false',
+              disabled: !enabled,
+              // A disabled control fires no pointer events for the custom tooltip,
+              // so the native one carries the reason.
+              title: ready ? undefined : label,
+              onClick: () => {
+                if (!enabled) return
+                request(sessionId)
+              },
+            },
+            h(DownloadGlyph, { size: 15 }),
+          ),
+        ),
+        h(ExportDialog, { sessionId: sessionId, t: t, dismiss: dismiss, useSessionLogDownload: useSessionLogDownload }),
+      )
+    }
+
+    // ---------------------------------------------------------------------
     // Plugin entry
     // ---------------------------------------------------------------------
     /** Services required to register copy and take a seat in the header. */
@@ -685,6 +959,10 @@ window.__ModuleLoader__.load({
       // the frame rather than to any one appearance.
       installLeftTopBar()
 
+      // One-shot (alpha.9): the header's shipped corner toggle joins the round
+      // outline the pack's own header icon buttons draw.
+      installHeaderRing()
+
       try {
         ctx.effect(
           () =>
@@ -702,14 +980,52 @@ window.__ModuleLoader__.load({
             ),
           'dsh-themes: header control',
         )
+        // The Session-log download seat (alpha.9): the SHIPPED occupant's id one
+        // priority lower, which in a list slot is what makes this registration the
+        // rendered one - the three-dot button with its one-item menu stops
+        // rendering and this package's download button takes the seat.
+        ctx.effect(
+          () =>
+            ctx.slots.inject(HEADER_SLOT, () =>
+              ctx.slots.register(
+                {
+                  name: HEADER_SLOT,
+                  id: DOWNLOAD_SEAT_ID,
+                  order: DOWNLOAD_SEAT_ORDER,
+                  priority: DOWNLOAD_SEAT_PRIORITY,
+                  locale: LOCALE_NS,
+                  inject: () => {
+                    const controller = resolveDownloadController(ctx)
+                    return {
+                      hooks: { sessionLogDownload: downloadSourceOf(controller) },
+                      request: (sessionId) => {
+                        const live = resolveDownloadController(ctx)
+                        if (live !== null) live.download(sessionId)
+                      },
+                      dismiss: (sessionId) => {
+                        const live = resolveDownloadController(ctx)
+                        if (live !== null) live.dismiss(sessionId)
+                      },
+                      available: controller !== null,
+                    }
+                  },
+                },
+                SessionLogDownloadAction,
+              ),
+            ),
+          'dsh-themes: session-log download seat',
+        )
         ctx.logger?.debug?.(
-          '[dsh-themes] theme control registered (' +
+          '[dsh-themes] header controls registered (' +
             PLUGIN_VERSION +
-            ', order ' +
+            '): themes at order ' +
             HEADER_ORDER +
-            ', left of Open In at ' +
+            ' left of Open In at ' +
             OPEN_IN_APP_ORDER +
-            ')',
+            ', download seat ' +
+            DOWNLOAD_SEAT_ID +
+            ' at priority ' +
+            DOWNLOAD_SEAT_PRIORITY,
         )
       } catch (err) {
         // eslint-disable-next-line no-console

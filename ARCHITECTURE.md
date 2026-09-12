@@ -488,20 +488,27 @@ Design points worth keeping:
   reacts to the same key. Mask click and Cancel cancel; none of them fires while
   `submit` is in flight.
 
-## 9. The Themes control (dsh-themes)
+## 9. The conversation header (dsh-themes)
+
+`dsh-themes` is the pack's **conversation-header package**: it owns the two
+controls described below — the Themes button and the Session-log download seat —
+plus the appearance overrides that dress the bar and the frame.
 
 The conversation header's right-hand group is a slot list
 (`conversation.session.header.utilities`): the shipped **Open In…** split button
-registers there at `order: -10` and the Session-log download at the default `0`.
-`dsh-themes` is one more occupant at **`order: -20`**, so it renders first —
+registers there at `order: -10` and the Session-log download seat at the default
+`0` (that seat used to draw a three-dot button — see the download seat below).
+The **Themes** occupant registers at **`order: -20`**, so it renders first —
 immediately left of Open In — and nothing shipped is patched or reordered.
+
+**The Themes control.** One icon button with a `Menu`:
 
 | Piece | Value |
 |---|---|
 | `id` | `dsh-themes` (the occupant's slot id) |
 | slot | `conversation.session.header.utilities` (list, session scope) |
 | `order` | `-20` — first in the group, left of Open In (-10) |
-| body | one icon button (28×28, 28px radius, 6px padding, 15px glyph — the header's own icon-button dress) opening a `Menu` of Light / Dark / System |
+| body | one icon button (28×28, 28px radius, 6px padding, 15px glyph, and the group's `.5px` hairline ring since alpha.9) opening a `Menu` of Light / Dark / System |
 | state | the shipped `theme` client service's snapshot, read through `ctx.get('theme')` |
 | write | `theme.setTheme(id)` — the same call the Settings → General → Appearance row makes |
 
@@ -652,6 +659,79 @@ where the mark was, and the product text **VN Harness**.
   above it. That is the accepted cost of this row: the harness offers no seam for
   the branding either, and a harness line that renames those classes needs the
   rule updated (the tracked check pins the rule's text, so the failure is loud).
+
+**The header ring (alpha.9).** The conversation header's icon buttons are meant
+to read as one group, and the group's dress is a **round hairline outline**:
+28×28, `border-radius:28px`, `.5px solid var(--dsw-alias-border-l3)`, held inside
+the box by `box-sizing:border-box`. The terminal control has always worn it and
+the pack's Session-log download seat does too; this package's own button did not,
+so it sat bare among them — it does now (its own `.dst-button` rule, no
+override needed). The ONE button on that bar that cannot draw the ring where it
+lives is the right bar's own collapse/expand toggle in the header corner: it
+belongs to a **GENERATED** forked bundle that is never hand-edited, so one rule
+gives it the ring instead:
+
+```css
+html [data-conversation-header-corner] button{
+  border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));
+  border-radius:28px;box-sizing:border-box}
+```
+
+Unlike the band above, this selector is a **stable hook**: the corner element
+carries ui-conversation's own `data-conversation-header-corner` marker, so the
+rule survives class-name churn. `box-sizing` is part of it because the toggle's
+own dress does not set it (without it the outline would grow the button by half a
+pixel per side). The corner is a `single` slot, so the rule cannot leak onto
+unrelated controls, and the rule set is installed once — there is no palette in
+it.
+
+**The Session-log download seat (alpha.9).** The same package also owns the
+header's **download seat**, because that seat is the other half of this group and
+the two controls share one dress. The shipped
+`@deepseek-ai/dsh-session-log-export` browser half put a **three-dot "more
+actions" button** there whose menu held exactly one item, "Download session log" —
+one click to open a menu, a second to pick the only thing in it.
+
+| Piece | Value |
+|---|---|
+| slot | `conversation.session.header.utilities` (list, session scope) |
+| `id` | **`session-log-download`** — the SHIPPED occupant's own id |
+| `priority` | **`-10`** (the shipped occupant sits at the default `0`) |
+| `order` | `0` — the shipped occupant's own order, so the button does not move |
+| export | the shipped `sessionLogDownload` controller, resolved with `ctx.get(...)` |
+| dress | the same `.dst-button` as the Themes control (28×28, 15px glyph, the ring) |
+
+**The seat is taken by the slot system's shadowing rule, not by CSS.** A list
+slot renders the **lowest priority** registration for a given `id` and keeps one
+occupant per id, so registering the *same* id one priority lower makes this
+component the rendered one and leaves the shipped registration in the registry,
+unrendered (`entriesOfSlot` is what the renderer walks). Nothing is hidden with a
+hashed class — a harness bump that renames classes cannot resurrect the three-dot
+button beside this one — and no DOM is touched. `dsh-editor` shadows the rendered
+Markdown body the same way (`key` + a lower `priority` in a keyed slot).
+
+**The export is not reimplemented.** The shipped row stays mounted *because* it
+is dual-face: its host half owns the authenticated `/api/session.export` stream
+and the `/export` slash command, so disabling the row would take the feature away
+rather than the button. Its browser half publishes the `sessionLogDownload`
+controller — the one-export-per-Session state machine that HEADs the export URL,
+hands the browser its own download and publishes `downloading` / `success` /
+`error` — and this control calls `download(sessionId)` / `dismiss(sessionId)` on
+it. Both surfaces therefore share ONE implementation and ONE busy state: the
+button renders disabled while the controller reports `downloading`, and `/export`
+behaves as it always did.
+
+**The seat's dialog came with the seat.** The shipped registration was the pair
+`[Menu, Dialog]`, so shadowing it takes the preparing/success/error dialog with
+it; the dialog is rendered here from the same store, with the same three states
+and the same Close button, so `/export` keeps its feedback. What is gone is the
+dropdown; what is left is one button and one dialog.
+
+**A missing service degrades instead of crashing.** `sessionLogDownload` is read
+with `ctx.get(...)` at use time and is never declared in `inject`; a profile that
+never mounts the shipped row gets a disabled button reading "Session export is
+unavailable". The inject face hands the renderer a CONSTANT observable source in
+that case, so the component's Hook call order is identical either way.
 
 ## 10. The file-manager half of Open In (dsh-open-in-app)
 
