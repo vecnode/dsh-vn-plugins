@@ -1,7 +1,7 @@
 {
   "name": "dsh-themes",
-  "version": "0.1.0-alpha.5",
-  "description": "Themes: a small control in the dsh-vn-plugins Web GUI's conversation header that switches the app between the light, dark and system appearance - the same preference Settings > General > Appearance owns - and shows which one is active. Also carries the pack's appearance overrides: the always-light paper the rendered Markdown view is drawn on, the chrome rule that hides the preview header's viewer menu on Markdown tabs so the page has exactly one renderer, and the left column's top bar (the branding row becomes the same 76px band, ending in the same hairline, that the middle and right columns open with). Alpha.",
+  "version": "0.1.0-alpha.6",
+  "description": "Themes: a small control in the dsh-vn-plugins Web GUI's conversation header that switches the app between the light, dark and system appearance - the same preference Settings > General > Appearance owns - and shows which one is active. Also carries the pack's appearance overrides: the always-light paper the rendered Markdown view is drawn on, the chrome rule that hides the preview header's viewer menu on Markdown tabs so the page has exactly one renderer, the left column's top bar (the branding row becomes the same 76px band, ending in the same hairline, that the middle and right columns open with), and the pack's VN branding on that row - the shipped mark and wordmark are replaced by a 24px black disc and the text VN Harness. Alpha.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

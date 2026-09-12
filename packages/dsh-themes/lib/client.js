@@ -59,7 +59,7 @@ window.__ModuleLoader__.load({
     /** The slot id of this occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.5'
+    const PLUGIN_VERSION = '0.1.0-alpha.6'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /** The Session header's utilities slot (the group the Open In control sits in). */
@@ -359,10 +359,23 @@ window.__ModuleLoader__.load({
     const TOPBAR_TAG = 'dsh-themes/left-topbar.css'
 
     /**
-     * Install the left column's top bar (alpha.4). Static CSS with no palette
-     * dependency beyond the border token itself, which carries a literal
-     * fallback for a profile that never mounts ui-theme - so, like the chrome
-     * override, it is installed once and needs no refresh on `theme/change`.
+     * Install the left column's top bar (alpha.4) and its VN branding (alpha.6).
+     * Static CSS with no palette dependency beyond the border token itself, which
+     * carries a literal fallback for a profile that never mounts ui-theme - so,
+     * like the chrome override, it is installed once and needs no refresh on
+     * `theme/change`.
+     *
+     * **Why the branding is an override and not a slot registration.** The mark
+     * and the product name are SLOTS (`sidebar.brand.mark`, `sidebar.brand.name`,
+     * both `single`), and the harness fills them from its own
+     * `@deepseek-ai/dsh-client-ui-brand-official` plugin. Registering our own
+     * occupants would mean fighting that plugin for a single-occupant slot; the
+     * row is `aria-hidden` decoration, and this package already owns this exact
+     * row (the band above). So the art is hidden and redrawn here, which also
+     * covers the layout's OWN fallback (`FishLogo`, used when no brand plugin is
+     * mounted at all): the children are hidden whatever they are, rather than
+     * assuming an `<svg>` from one particular provider.
+     *
      * @returns whether the rule is in place.
      */
     function installLeftTopBar() {
@@ -383,6 +396,16 @@ window.__ModuleLoader__.load({
         // strip for the 36px rail toggle centred on the same y=25, and the
         // core's own 12px rail gap under the line.
         'html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1px 10px 32.5px}',
+        // The VN branding: whatever the mark and the name hold - the shipped
+        // wordmark, the fish, or the layout's own fallback label - is hidden, and
+        // the disc and the product text are drawn in its place. `!important`
+        // because the occupants are React-rendered art this rule must beat.
+        'html .hHd-Xa_root .hHd-Xa_brandMark>*,html .hHd-Xa_root .hHd-Xa_brandName>*,html .hHd-Xa_root .hHd-Xa_railMark>*{display:none!important}',
+        // The mark: a plain black disc at the slot's own 24px, in the wide row
+        // and in the collapsed rail (which draws the mark alone).
+        'html .hHd-Xa_root .hHd-Xa_brandMark::before,html .hHd-Xa_root .hHd-Xa_railMark::before{content:"";width:24px;height:24px;border-radius:50%;background:#000;flex:none;display:block}',
+        // The name: the pack's own product text.
+        'html .hHd-Xa_root .hHd-Xa_brandName::before{content:"VN Harness"}',
       ].join('')
       let tag = null
       try {

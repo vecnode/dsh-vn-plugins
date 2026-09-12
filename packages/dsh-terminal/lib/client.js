@@ -59,7 +59,7 @@ window.__ModuleLoader__.load({
     // Constants
     // ---------------------------------------------------------------------
     /** Shown on the dock's bar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.2'
+    const PLUGIN_VERSION = '0.1.0-alpha.3'
     /** The header list this control joins (Open In... is -10). */
     const HEADER_SLOT = 'conversation.session.header.utilities'
     /** The root-scoped overlay list the layout package renders inside the frame. */
@@ -900,7 +900,7 @@ window.__ModuleLoader__.load({
       //
       // Deliberately NOT keyed on the revision: every status bump would run the
       // cleanup and the effect again, churning the columns' heights. The
-      // observer and the resize listener cover live moves.
+      // observers and the resize listener cover live moves.
       useEffect(() => {
         const node = rootRef.current
         if (node === null) return undefined
@@ -908,13 +908,30 @@ window.__ModuleLoader__.load({
         applyGeometry(node, frame)
         applyInsets(frame)
         let observer = null
+        let columnObserver = null
         if (open && frame !== null && typeof MutationObserver === 'function') {
+          // The frame's inline `style` changes when a column is dragged or the
+          // right bar opens/closes: one mutation, settled immediately.
           observer = new MutationObserver(() => {
             applyGeometry(node, frame)
             applyInsets(frame)
           })
           observer.observe(frame, { attributes: true, attributeFilter: ['style', 'data-rightbar-fullscreen'] })
         }
+        if (open && frame !== null && typeof ResizeObserver === 'function') {
+          // The LEFT BAR is ANIMATED, which is what the observer above cannot see:
+          // collapsing or expanding it rewrites the grid tracks ONCE and then
+          // transitions them, so the mutation fires before the width has actually
+          // changed - and never again, leaving the dock at the old left edge. The
+          // two columns the dock spans change SIZE on every frame of that
+          // transition, which is exactly what a ResizeObserver reports.
+          columnObserver = new ResizeObserver(() => applyGeometry(node, frame))
+          for (const column of columnsFor(frame)) columnObserver.observe(column)
+        }
+        const onTransitionEnd = (event) => {
+          if (event.target === frame) applyGeometry(node, frame)
+        }
+        if (open && frame !== null) frame.addEventListener('transitionend', onTransitionEnd)
         const onResize = () => {
           applyGeometry(node, frame)
           applyInsets(frame)
@@ -924,7 +941,9 @@ window.__ModuleLoader__.load({
         window.addEventListener('resize', onResize)
         return () => {
           window.removeEventListener('resize', onResize)
+          if (frame !== null) frame.removeEventListener('transitionend', onTransitionEnd)
           if (observer !== null) observer.disconnect()
+          if (columnObserver !== null) columnObserver.disconnect()
         }
       }, [open, height])
 

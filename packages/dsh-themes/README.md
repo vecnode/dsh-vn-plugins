@@ -1,4 +1,4 @@
-# dsh-themes (alpha.5)
+# dsh-themes (alpha.6)
 
 **Themes** adds one small control to the DeepSeek Harness web GUI's conversation
 header: a button, the size and dress of the header's other icon buttons, sitting
@@ -13,8 +13,10 @@ theme. The second is the **Markdown chrome** (alpha.3): that same page has exact
 one viewer, so the preview header's viewer menu is hidden on Markdown tabs. The
 third is the left column's **top bar** (alpha.4): the sidebar's branding row
 becomes the same 76px band, ending in the same hairline, that the middle and right
-columns open with. See below. All three are plain engine-neutral CSS, so they hold
-in whichever browser the Web GUI is opened in.
+columns open with — and, since alpha.6, that row wears the pack's own **VN
+branding** (a 24px black disc and the text *VN Harness*) instead of the shipped
+fish and wordmark. See below. All of them are plain engine-neutral CSS, so they
+hold in whichever browser the Web GUI is opened in.
 
 It is a thin control, not a second theme system:
 
@@ -96,7 +98,7 @@ body [data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/
 - **Only the header control goes.** The path, the reload tool and the document
   itself are untouched, as is the page's **Edit** button.
 
-## The left column's top bar (alpha.4, gap alpha.5)
+## The left column's top bar (alpha.4, gap alpha.5, branding alpha.6)
 
 The frame opens with one band per column, and every column's band ends in the same
 hairline at **y=76**:
@@ -148,6 +150,41 @@ html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1
 - **Static, installed once.** No palette to read beyond the border token, which
   carries a literal fallback for a profile that never mounts ui-theme, so it gets
   its own tag (`dsh-themes/left-topbar.css`) and needs no `theme/change` refresh.
+
+### The VN branding (alpha.6)
+
+The same rule set also replaces what that row *shows*: the product's mark and name
+become a plain **24px black disc** and the text **VN Harness**.
+
+```css
+/* hide whatever occupies the brand slots, then draw the replacements */
+html .hHd-Xa_root .hHd-Xa_brandMark>*,
+html .hHd-Xa_root .hHd-Xa_brandName>*,
+html .hHd-Xa_root .hHd-Xa_railMark>*{display:none!important}
+html .hHd-Xa_root .hHd-Xa_brandMark::before,
+html .hHd-Xa_root .hHd-Xa_railMark::before{
+  content:"";width:24px;height:24px;border-radius:50%;background:#000;flex:none;display:block
+}
+html .hHd-Xa_root .hHd-Xa_brandName::before{content:"VN Harness"}
+```
+
+- **An override, not a slot registration.** The mark and the name are slots —
+  `sidebar.brand.mark` and `sidebar.brand.name`, both **`single`** — and the
+  shipped `@deepseek-ai/dsh-client-ui-brand-official` row already occupies both.
+  Registering our own would be a fight over a one-occupant seat, and the row is
+  `aria-hidden` decoration inside the band this package already owns.
+- **It hides children, not an `<svg>`.** The shipped brand plugin wraps each
+  occupant in `<div data-slot="sidebar.brand.mark" style="display: contents">`
+  (verified in the running app), so the rule targets the children — which also
+  covers the layout's own `FishLogo` fallback, used when no brand plugin is
+  mounted at all. `!important` is what beats that inline `display: contents`.
+- **Both rail states.** The collapsed rail draws the mark alone, in its own
+  element (`.hHd-Xa_railMark`), and gets the same disc.
+- **The disc is plain black**, as asked: against the dark theme's sidebar fill it
+  reads as a dark dot. One line here changes it if that is ever wanted.
+- Verified in the running app: the shipped art computes to `display:none`, and the
+  disc computes to `24px × 24px`, `border-radius:50%`, `rgb(0,0,0)`, with the name
+  reading `"VN Harness"` — in the wide row and in the rail.
 
 ## Where it sits
 

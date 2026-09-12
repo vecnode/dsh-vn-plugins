@@ -90,7 +90,11 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
    Drag its top edge to resize it, `+` in its bar opens more terminals, and
    `Ctrl+Shift+C` / `Ctrl+Shift+V` copy and paste (a bare `Ctrl+C` still
    interrupts). It closes with the same button or its `×`; the shell is kept
-   briefly, so reopening the dock in that conversation reattaches to it.
+   briefly, so reopening the dock in that conversation reattaches to it. The
+   dock's left edge follows the left bar when that is collapsed or expanded —
+   the bar itself never moves.
+4. The left bar's top row wears the pack's branding: a **black disc** and **VN
+   Harness** where the shipped mark and wordmark were.
 
 ## Troubleshooting
 
@@ -201,6 +205,19 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   (the room was taken from the frame, whose single grid row the left bar shares).
   alpha.2 takes it from the middle and right columns only. Confirm the served
   bundle prints alpha.2 or later.
+- **The dock keeps the old left edge after collapsing or expanding the left
+  bar** — that was alpha.2 (only the frame's `style` mutation was watched, and the
+  left bar is *animated*, so it reported the pre-transition width and never fired
+  again). alpha.3 follows the columns' size instead. Confirm the dock's bar prints
+  `dsh-terminal 0.1.0-alpha.3` or later and hard-refresh (Ctrl+F5).
+- **The left bar still shows the fish and the "deepseek" wordmark** — the branding
+  override arrives with `dsh-themes` alpha.6; reinstall (`install.bat` /
+  `./install.sh`, or `-Force`) so that version is in the profile, then restart and
+  hard-refresh. The row should show a black disc and **VN Harness**.
+- **The left bar's branding looks unstyled or empty after a harness update** —
+  the override is pinned to the sidebar's hashed class names (like the band above
+  it). A harness line that renames them matches nothing; the fix is to re-read the
+  new names in `dsh-themes/lib/client.js` (`installLeftTopBar`).
 - **`Ctrl+C` in the terminal copies instead of interrupting** — it must not: a
   bare `Ctrl+C` is SIGINT and the clipboard is `Ctrl+Shift+C` (`Cmd+C` on macOS).
   A single-key difference here is a bug, not a preference.

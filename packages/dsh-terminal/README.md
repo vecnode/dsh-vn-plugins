@@ -1,4 +1,4 @@
-# dsh-terminal (alpha.2)
+# dsh-terminal (alpha.3)
 
 **Terminal** is a **bottom dock** for the DeepSeek Harness web GUI: a real shell,
 in the app, under the conversation. A header button — the same 28px round control
@@ -64,7 +64,13 @@ nodes into a React-managed container), so it positions itself:
     **padding** box, so padding would leave that panel where it was and the dock
     would cover its bottom. A height shortens the column itself.
 - **Live tracking** — a `MutationObserver` on the frame's `style` attribute (a
-  drag rewrites it every frame) plus a `resize` listener.
+  drag rewrites it every frame), a `ResizeObserver` on the two columns the dock
+  spans, a `transitionend` on the frame, and a `resize` listener. The
+  `ResizeObserver` is what follows the **left bar being collapsed or expanded**:
+  that is animated, so the grid tracks are rewritten *once* and then transitioned
+  — the mutation reports the pre-transition value and never fires again (alpha.2
+  left the dock standing at the old edge), while the columns' **size** changes on
+  every frame of the transition. `transitionend` is the final snap.
 - **Intent is separate from geometry.** `data-open` is user intent;
   `data-suspended` is derived (a fullscreen right bar takes the viewport, and the
   dock yields *and* hands the columns their height back for the duration). The
@@ -181,17 +187,28 @@ one (and says so when it does not): `init` → `ready` → a command answered �
 `kill`, a JSON line proven to be shell input rather than a control frame, and an
 unauthenticated upgrade refused with 401.
 
-The client check cannot run effects, so the two geometry promises are pinned at
-the source level: this bundle must never write the frame's height, it must inset
-the two columns it spans, and it must re-fit (and follow the end) on a resize.
+The client check cannot run effects, so the geometry promises are pinned at the
+source level: this bundle must never write the frame's height, it must inset the
+two columns it spans, it must re-fit (and follow the end) on a resize, and it
+must track the left bar through *both* the mutation observer and the column
+`ResizeObserver` (plus the `transitionend` snap).
 The behaviour itself was verified in a real browser engine while it was built —
 including that the left bar's height and contents are byte-for-byte where they
 were before the dock opened, that the middle and right columns end exactly at the
-dock's top edge, and that growing then shrinking the dock takes the visible rows
-from 13 → 16 → 6 with the newest output on screen throughout.
+dock's top edge, that growing then shrinking the dock takes the visible rows from
+13 → 16 → 6 with the newest output on screen throughout, and that the dock follows
+an **animated** sidebar collapse and expand (the case that failed in alpha.2: with
+the tracking removed, that check reports the dock stuck at its old edge).
 
 ## Alpha notes
 
+- **alpha.3** — collapsing or expanding the left bar left the dock at its old left
+  edge. The left bar is animated: one grid rewrite, then a CSS transition, so the
+  `MutationObserver` on that rewrite reports the *pre-transition* track and is
+  never called again. A `ResizeObserver` on the two columns the dock spans (whose
+  **size** changes on every frame of the transition) now follows it, with a
+  `transitionend` snap as the backstop. Measured in the engine: the callback sees
+  `260px` while the track animates `260 → 171 → 62 → 60`.
 - **alpha.2** — two reports from the first run, both fixed here:
   1. resizing the dock left the emulator at its old size, so the line count was
      wrong and the newest output could sit out of view. Every size change now

@@ -557,6 +557,18 @@ check('top bar pins the rail padding', topBar.includes('.hHd-Xa_root.hHd-Xa_coll
 check('top bar re-dresses the rail row', topBar.includes('.hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1px 10px 32.5px}'))
 check('top bar is engine-neutral', topBar.includes(':has('), false)
 
+// The VN branding on that same row (alpha.6). The mark and the name are SLOTS the
+// harness's own brand plugin occupies, so the art is hidden whatever the occupant
+// is - wordmark, fish, or the layout's own fallback label - and the replacements
+// are drawn on top: a plain black disc at the slot's 24px, and the product text.
+check(
+  'branding hides whatever occupies the brand slots',
+  topBar.includes('.hHd-Xa_brandMark>*,html .hHd-Xa_root .hHd-Xa_brandName>*,html .hHd-Xa_root .hHd-Xa_railMark>*{display:none!important}'),
+)
+check('branding draws the mark as a 24px black disc', topBar.includes('.hHd-Xa_brandMark::before,html .hHd-Xa_root .hHd-Xa_railMark::before{content:"";width:24px;height:24px;border-radius:50%;background:#000'))
+check('branding draws the product name', topBar.includes('.hHd-Xa_brandName::before{content:"VN Harness"}'))
+check('branding covers the collapsed rail too', topBar.includes('.hHd-Xa_railMark::before'))
+
 // --------------------------------------------------------------- dsh-gittree
 const gitTree = loadBundle('packages/dsh-gittree/lib/client.js', {})
 const gitCssTag = gitTree.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-gittree/gittree.css').pop()
@@ -669,7 +681,14 @@ check('terminal never resizes the frame', /frame(El)?\.style\.height\s*=/.test(t
 check('terminal insets the two columns it spans', termSource.includes('previousElementSibling') && termSource.includes('frame.children[0]'))
 check('terminal gives room by column height', termSource.includes("'calc(100% - ' + String(dock.height) + 'px)'"))
 check('terminal refits on resize and follows the end', termSource.includes('refit()') && termSource.includes('scrollToBottom()'))
-check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.2'))
+//  3. the LEFT BAR is animated: collapsing it rewrites the grid tracks once and
+//     then transitions them, so a MutationObserver on that write reads the
+//     PRE-transition value and is never called again - the dock stood at the old
+//     left edge. What changes on every frame of that transition is the SIZE of
+//     the columns the dock spans, which is what a ResizeObserver reports.
+check('terminal tracks the animated left bar', termSource.includes('new ResizeObserver(') && termSource.includes('columnObserver.observe(column)'))
+check('terminal also snaps on transitionend', termSource.includes("frame.addEventListener('transitionend', onTransitionEnd)"))
+check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.3'))
 
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')

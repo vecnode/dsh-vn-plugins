@@ -605,6 +605,32 @@ body [data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/
   `dsh-editor` still renders Markdown, just with no way back to a text surface,
   which is the shipped behaviour anyway.
 
+**The VN branding (alpha.6).** The left bar's top row carries the product's mark
+and name, and both are **slots**: `sidebar.brand.mark` and `sidebar.brand.name`,
+each `single`, which the shipped `@deepseek-ai/dsh-client-ui-brand-official` row
+fills (and which fall back to the layout's own `FishLogo` when no brand plugin is
+mounted). The pack replaces that art with its own: a plain **24px black disc**
+where the mark was, and the product text **VN Harness**.
+
+- **An override, not a slot registration.** A `single` slot has one occupant, and
+  the shipped brand row already holds both of them: a second registration would
+  be a fight over a seat rather than a replacement. The row is `aria-hidden`
+  decoration inside the band this package already owns (alpha.4), so it is hidden
+  and redrawn there.
+- **Whatever the occupant is.** The shipped brand plugin wraps each occupant in
+  `<div data-slot="sidebar.brand.mark" style="display: contents">`, so the rule
+  hides *children* - `display:none!important` - rather than assuming an `<svg>`
+  from one particular provider. That also covers the layout's own fallback label.
+- **The replacements are drawn, not inserted**: a `::before` disc at the slot's
+  own 24px (round, `#000`) on `.hHd-Xa_brandMark`, the same disc on the collapsed
+  rail's `.hHd-Xa_railMark`, and `content:"VN Harness"` on `.hHd-Xa_brandName`.
+  Being in the same pinned rule set as the band, they are installed once and need
+  no refresh on `theme/change`.
+- **It is pinned to the sidebar's hashed class names**, exactly like the band
+  above it. That is the accepted cost of this row: the harness offers no seam for
+  the branding either, and a harness line that renames those classes needs the
+  rule updated (the tracked check pins the rule's text, so the failure is loud).
+
 ## 10. The file-manager half of Open In (dsh-open-in-app)
 
 The Session header's **"Open In…"** split button comes from the shipped
@@ -700,7 +726,15 @@ region - `ctx.layout` only exposes `openRightbar`/`closeRightbar`/`toggleSidebar
     where it was and the dock would cover its bottom. A height shortens the column
     itself, so the panel ends at the dock's top edge like everything else.
 - **Live moves**: a `MutationObserver` on the frame's `style` attribute (a drag
-  rewrites it every frame) plus a `resize` listener.
+  rewrites it every frame), **plus a `ResizeObserver` on the two columns the dock
+  spans and a `transitionend` on the frame**, plus a `resize` listener. The
+  observers are not redundant: the LEFT BAR is animated, so collapsing or
+  expanding it rewrites the grid tracks ONCE and then transitions them - the
+  mutation fires while the computed track still reads the pre-transition value and
+  is never called again, which left the dock standing at the old left edge with a
+  stale width. What changes on every frame of that transition is the SIZE of the
+  columns, which is what the ResizeObserver reports; `transitionend` is the final
+  snap.
 - **Intent vs geometry**: `data-open` is user intent, `data-suspended` is derived
   (a fullscreen right bar takes the viewport; the dock yields *and* hands the
   columns their height back for the duration). The observer writes only the
@@ -899,6 +933,8 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
 | The terminal panel covers the conversation instead of pushing it up | the middle/right columns' inline `height: calc(100% - <dock>px)` was removed or overridden by something else writing their `style.height` |
 | Opening the dock moves the LEFT bar (its items slide up) | regression of alpha.1, where the room came from the frame's own height: the frame has ONE grid row shared with the left bar, so only the two columns the dock spans may be inset. The check `terminal never resizes the frame` pins this |
 | The terminal shows the wrong number of lines, or the newest output is out of view after a resize | the emulator was not re-fitted: a size change must recompute rows/cols from the new box, send `resize` to the PTY, and `scrollToBottom()`. Pinned by the check `terminal refits on resize and follows the end` |
+| The dock keeps the old left edge after collapsing/expanding the left bar | only the frame's `style` mutation was being watched. The left bar is ANIMATED (one grid rewrite, then a transition), so that mutation reports the pre-transition value and never fires again - the `ResizeObserver` on the two columns is what follows it. Pinned by the check `terminal tracks the animated left bar` |
+| The left bar still shows the fish / "deepseek" wordmark | `dsh-themes` alpha.6 hides whatever occupies `sidebar.brand.mark` / `sidebar.brand.name` and draws the VN mark instead; confirm the served `dsh-themes` bundle prints alpha.6 and hard-refresh. If the sidebar's hashed classes changed in a harness bump, the rule (pinned to them) needs updating |
 | A terminal prints nothing after a page reload | the shell is kept only five minutes after its last socket (`DETACH_GRACE_MS`); past that it was reaped and the dock opens a NEW shell in the same folder |
 | The terminal's `Ctrl+C` copies instead of interrupting | it must not: `Ctrl+C` is SIGINT and clipboard is `Ctrl+Shift+C` (`Cmd+C` on macOS). A single-key difference here is a bug, not a preference |
 | Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; both halves read it from `node_modules/.modules.yaml` and auto-match - re-run the installer |

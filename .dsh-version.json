@@ -2,31 +2,54 @@
   "comment": "The DeepSeek Harness version line this plugin pack is built and tested against. Plugins are shipped as alpha until the owner promotes them to stable. The installer pins this exact dsh version when driving the CLI. 'vendoredFrom' records the harness line whose client bundles dsh-rightbar / dsh-rightbar-files / dsh-open-in-app were forked from. dsh-vn-master is the pack's blank master: the bundle layer alone, no browser half.",
   "dsh": "0.1.5-rc.1",
   "vendoredFrom": "0.1.5-rc.1",
-  "platforms": ["win32", "darwin", "linux"],
+  "platforms": [
+    "win32",
+    "darwin",
+    "linux"
+  ],
   "comment_platforms": "The plugins are plain JavaScript and platform-neutral; the only OS-specific code is a launcher choosing the right command for the host: dsh-open-in-app's file-browser launcher (explorer.exe / open / xdg-open, WSL-aware) and dsh-terminal's shell resolver (pwsh.exe or powershell.exe / $SHELL or /bin/zsh / $SHELL or /bin/bash). The launchers run on Windows (install.bat, PowerShell 5.1 or 7) and on macOS/Linux (install.sh, PowerShell 7+).",
   "packages": {
     "dsh-vn-master": {
       "version": "0.1.0-alpha.1",
-      "rows": ["master"],
+      "rows": [
+        "master"
+      ],
       "role": "the pack's master and deliberately blank: the bundle layer alone (installed last, so it is the final word per row); no dsh.client, no service, no inject edge, and no core-row disables - those stay with the packages that replace the rows",
       "rowOverrides": []
     },
     "dsh-rightbar": {
       "version": "0.1.0-alpha.1",
-      "rows": ["rightbar"],
-      "disablesRows": ["ui-sidebar-right", "ui-sidebar-files"],
-      "vendors": ["@deepseek-ai/dsh-client-ui-sidebar-right"]
+      "rows": [
+        "rightbar"
+      ],
+      "disablesRows": [
+        "ui-sidebar-right",
+        "ui-sidebar-files"
+      ],
+      "vendors": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
     },
     "dsh-rightbar-files": {
       "version": "0.1.0-alpha.1",
-      "rows": ["rightbar-files"],
-      "vendors": ["@deepseek-ai/dsh-client-ui-sidebar-files"]
+      "rows": [
+        "rightbar-files"
+      ],
+      "vendors": [
+        "@deepseek-ai/dsh-client-ui-sidebar-files"
+      ]
     },
     "dsh-editor": {
       "version": "0.1.0-alpha.8",
-      "rows": ["editor"],
+      "rows": [
+        "editor"
+      ],
       "rowOverrides": [],
-      "uses": ["dsh-modal", "@deepseek-ai/dsh-client-ui-theme", "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"],
+      "uses": [
+        "dsh-modal",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"
+      ],
       "shadowsSlots": [
         {
           "slot": "sidebar.right.tab.document",
@@ -38,41 +61,69 @@
     },
     "dsh-gittree": {
       "version": "0.1.0-alpha.3",
-      "rows": ["gittree"],
+      "rows": [
+        "gittree"
+      ],
       "rowOverrides": [],
       "role": "the workspace's COMMIT HISTORY as a page tab type, labelled History in the capsule and the chip while the package, row and address keep the gittree name (guide order 30, after Files and Editor), with the branch and current commit in its file bar; its Node half owns read-only /api/dsh-gittree routes, and the tab reads state with brief=1 so no file list is ever built - no fork, no core row disabled, nothing for sync-vendored.ps1 to track",
-      "uses": ["dsh-rightbar", "git on PATH"]
+      "uses": [
+        "dsh-rightbar",
+        "git on PATH"
+      ]
     },
     "dsh-terminal": {
-      "version": "0.1.0-alpha.2",
-      "rows": ["terminal"],
+      "version": "0.1.0-alpha.3",
+      "rows": [
+        "terminal"
+      ],
       "rowOverrides": [],
       "role": "a real shell in a bottom dock: a header control (order 30, immediately right of Open In...) toggles a horizontal panel that starts at the left bar's right edge, runs to the full page width and sits UNDER the middle and right columns, which make room for it - those two columns (the frame's FIRST element child is the left bar and is never touched) get height calc(100% - Hpx) while the dock is open and the inline height they had before this plugin ran when it closes, so the left bar keeps its full height and nothing in it moves; the dock's left edge is the frame's resolved gridTemplateColumns first track, so it follows the left bar opening, collapsing and being dragged. Every resize re-fits the emulator (rows/cols from the new box) and scrolls to the end of the output, so the visible line count matches the panel and the newest lines stay in view. xterm.js is vendored (lib/vendor/xterm.js + xterm.css, GENERATED from vendor/) the way the editor vendors CodeMirror, and the Node half owns /api/dsh-terminal/health, /api/dsh-terminal/vendor/* and ONE authenticated WebSocket upgrade (/api/dsh-terminal/pty) that attaches a browser xterm to a real PTY from the HARNESS'S OWN node-pty - resolved, never installed (anchors: process.argv[1], $DSH_HOME/profiles, this package), with a graceful 'no PTY on this host' instead of a broken boot. One PTY per (conversation, slot), kept five minutes after its last socket so a reload reattaches with a scrollback replay, reaped otherwise. No fork, no core row disabled, nothing for sync-vendored.ps1 to track",
-      "uses": ["@deepseek-ai/dsh-client-ui-conversation", "the harness installation's node-pty and ws"],
-      "vendors": ["@xterm/xterm@5.5.0", "@xterm/addon-fit@0.10.0"]
+      "uses": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "the harness installation's node-pty and ws"
+      ],
+      "vendors": [
+        "@xterm/xterm@5.5.0",
+        "@xterm/addon-fit@0.10.0"
+      ]
     },
     "dsh-modal": {
       "version": "0.1.0-alpha.1",
-      "rows": ["modal"],
-      "provides": ["modals"],
+      "rows": [
+        "modal"
+      ],
+      "provides": [
+        "modals"
+      ],
       "rowOverrides": []
     },
     "dsh-themes": {
-      "version": "0.1.0-alpha.5",
-      "rows": ["themes"],
+      "version": "0.1.0-alpha.6",
+      "rows": [
+        "themes"
+      ],
       "rowOverrides": [],
-      "uses": ["@deepseek-ai/dsh-client-ui-theme"],
+      "uses": [
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
       "overrides": [
         "markdown paper: re-declares ui-theme's light declarations on the rendered Markdown root, so the page stays white in the dark theme",
         "markdown chrome: hides the preview header's viewer menu on Markdown tabs (the page has exactly one renderer; the editor's Edit button is the way back to editing)",
-        "left top bar: the sidebar branding row becomes the 76px band the middle and right columns open with, its hairline at the same y=76 in both rail states, with the mark, brand name and collapse control on the band's top strip and the core's 8px/12px gap kept under the line; pinned to the sidebar's hashed class names"
+        "left top bar: the sidebar branding row becomes the 76px band the middle and right columns open with, its hairline at the same y=76 in both rail states, with the mark, brand name and collapse control on the band's top strip and the core's 8px/12px gap kept under the line; pinned to the sidebar's hashed class names",
+        "branding: the left bar brand row drops the shipped mark and wordmark - whatever occupies the single-occupant sidebar.brand.mark / sidebar.brand.name slots, including the layout fallback - and draws a 24px black disc plus the product text VN Harness in their place, in the wide row and in the collapsed rail"
       ]
     },
     "dsh-open-in-app": {
       "version": "0.1.0-alpha.1",
-      "rows": ["native-open-in-app"],
-      "disablesRows": ["ui-open-in-app"],
-      "vendors": ["@deepseek-ai/dsh-client-ui-open-in-app"],
+      "rows": [
+        "native-open-in-app"
+      ],
+      "disablesRows": [
+        "ui-open-in-app"
+      ],
+      "vendors": [
+        "@deepseek-ai/dsh-client-ui-open-in-app"
+      ],
       "vendoredPatches": 2
     }
   }

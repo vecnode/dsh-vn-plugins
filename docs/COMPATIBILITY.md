@@ -98,7 +98,12 @@ The pack targets the harness line DeepSeek ships to the raw web install
   `[data-document-markdown]` root, so the rendered Markdown view stays white in
   the dark theme, and the **Markdown chrome**, one static rule that hides the
   preview header's viewer menu on Markdown tabs (the page has exactly one
-  renderer; the editor's **Edit** button is the way back).
+  renderer; the editor's **Edit** button is the way back). On the pack's own
+  **left top bar** it also replaces the branding: the shipped mark and wordmark
+  (they are `single`-slot occupants filled by the harness's `brand-official` row,
+  with the layout's own fish as fallback) are hidden and redrawn as a plain
+  **24px black disc** and the text **VN Harness**, in the wide row and in the
+  collapsed rail.
 - The shipped `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` row stays
   enabled: it only consumes `sidebarRightTabs` and the keyed seat, so the
   code/image/PDF/HTML previews keep working inside the pack's bar, and the editor
@@ -251,6 +256,29 @@ The pack targets the harness line DeepSeek ships to the raw web install
   before the dock opened, the middle and right columns end at the dock's top edge,
   and growing then shrinking the dock takes the visible rows 13 -> 16 -> 6 with the
   newest output on screen throughout.
+
+- **terminal alpha.3**: collapsing or expanding the **left bar** left the dock
+  standing at its old left edge. The left bar is animated - one grid rewrite,
+  then a CSS transition - so the `MutationObserver` on that rewrite reports the
+  **pre-transition** track (`260px` while the track animates `260 → 171 → 62 →
+  60`, measured in the engine) and is never called again. A `ResizeObserver` on
+  the two columns the dock spans - whose *size* changes on every frame of the
+  transition - now follows it, with a `transitionend` snap as the backstop. No
+  new packages, no changed placement: a restart plus a hard refresh is enough.
+
+- **themes alpha.6**: the left bar's **branding is now the pack's**. The mark and
+  the product name are `sidebar.brand.mark` / `sidebar.brand.name`, both
+  **`single`** slots that the shipped `@deepseek-ai/dsh-client-ui-brand-official`
+  row already occupies (and which fall back to the layout's own fish), so this is
+  an **override** on the band alpha.4 already owns rather than a fight for a
+  one-occupant seat: the slots' children are hidden (`display:none!important`,
+  which beats the `display:contents` wrapper the app puts around each occupant)
+  and a **24px black disc** plus the text **VN Harness** are drawn in their place
+  - in the wide row and in the collapsed rail. Verified in the running app: the
+  shipped art computes to `display:none` and the disc to `24px × 24px`,
+  `border-radius:50%`, `rgb(0,0,0)`. Pinned to the sidebar's hashed class names
+  like the band itself, so a harness bump that renames them needs that one rule
+  updated (and the tracked check fails loudly).
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the
