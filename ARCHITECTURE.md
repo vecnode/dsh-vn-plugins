@@ -684,20 +684,36 @@ region - `ctx.layout` only exposes `openRightbar`/`closeRightbar`/`toggleSidebar
   `gridTemplateColumns: <sidebar>px minmax(0,1fr) <rightbar>px`, so the resolved
   computed style's first track IS the left bar's width - no hashed class names,
   and it tracks the bar opening, collapsing and being dragged.
-- **Room**: while open, the frame's inline height becomes
-  `calc(100% - <dock>px)`; on close the previous inline value is restored
-  exactly. React never writes `style.height` on the frame (it writes
-  `gridTemplateColumns`), so the override survives re-renders.
+- **Room**: it comes from the **middle and right columns only**, as their own
+  `height: calc(100% - <dock>px)`; on close each gets back the inline height it
+  had before this plugin ran. Both are found without hashed class names - the
+  layout marks the right column itself (`data-rightbar-col`), the middle column is
+  its immediately preceding sibling, and the frame's first element child (the left
+  bar) is explicitly never one of them.
+  - **Not the frame's height.** The frame has a single grid row, so shrinking the
+    frame shortens the left column with it. alpha.1 did that, and the left bar's
+    contents visibly slid up the instant the dock opened - the dock starts at the
+    left bar's right edge, so the left bar has no business losing height.
+  - **Not `padding-bottom` either.** The right column's panel is absolutely
+    positioned inside it (`top:0; bottom:0`), and an absolute child is placed
+    against its ancestor's *padding* box: padding would leave that panel exactly
+    where it was and the dock would cover its bottom. A height shortens the column
+    itself, so the panel ends at the dock's top edge like everything else.
 - **Live moves**: a `MutationObserver` on the frame's `style` attribute (a drag
   rewrites it every frame) plus a `resize` listener.
 - **Intent vs geometry**: `data-open` is user intent, `data-suspended` is derived
-  (a fullscreen right bar takes the viewport). The observer writes only the
+  (a fullscreen right bar takes the viewport; the dock yields *and* hands the
+  columns their height back for the duration). The observer writes only the
   derived one. This split is not cosmetic: the first spike run had the observer
   set the open state too, so the close that restored the frame's height
   re-triggered the observer and reopened the dock. The spike ran that scenario in
   a real engine before any of the package existed.
-- The grip drags the height (120px ... 70% of the viewport) and it is remembered
-  in `localStorage`.
+- **Resizing**: the grip drags the height (120px ... 70% of the viewport), it is
+  remembered in `localStorage`, and every change **re-fits the emulator** - rows
+  and cols recomputed from the new box, the new size sent to the PTY, and the view
+  put back on the end of the output. Without that re-fit the panel keeps the old
+  line count with the newest output out of sight, which is the pair of symptoms
+  alpha.2 fixed.
 
 **Where the PTY comes from.** Not from this pack. The harness already ships
 `node-pty` (ConPTY prebuilds for `win32-x64/arm64`, plus `darwin-x64/arm64` and
@@ -880,7 +896,9 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
 | No Terminal button in the conversation header | `dsh-terminal` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or the bundle did not activate - check the console for `[dsh-terminal]` |
 | The dock says "No terminal on this host" | the harness installation's `node-pty` could not be resolved from this process (`process.argv[1]`, `$DSH_HOME/profiles`, or beside the package); the dock's notice carries the reason, and `GET /api/dsh-terminal/health` reports `available:false` with it. The rest of the pack is unaffected |
 | The dock does not open, or opens at the wrong place | the frame it measures is gone: the dock positions itself from `[data-shell-overlay]`'s parent and that frame's resolved `gridTemplateColumns`, so a harness line that stops using grid columns for the layout needs §11 updated |
-| The terminal panel covers the conversation instead of pushing it up | the frame's inline `height: calc(100% - <dock>px)` was removed or overridden by something else writing `style.height` on the frame element |
+| The terminal panel covers the conversation instead of pushing it up | the middle/right columns' inline `height: calc(100% - <dock>px)` was removed or overridden by something else writing their `style.height` |
+| Opening the dock moves the LEFT bar (its items slide up) | regression of alpha.1, where the room came from the frame's own height: the frame has ONE grid row shared with the left bar, so only the two columns the dock spans may be inset. The check `terminal never resizes the frame` pins this |
+| The terminal shows the wrong number of lines, or the newest output is out of view after a resize | the emulator was not re-fitted: a size change must recompute rows/cols from the new box, send `resize` to the PTY, and `scrollToBottom()`. Pinned by the check `terminal refits on resize and follows the end` |
 | A terminal prints nothing after a page reload | the shell is kept only five minutes after its last socket (`DETACH_GRACE_MS`); past that it was reaped and the dock opens a NEW shell in the same folder |
 | The terminal's `Ctrl+C` copies instead of interrupting | it must not: `Ctrl+C` is SIGINT and clipboard is `Ctrl+Shift+C` (`Cmd+C` on macOS). A single-key difference here is a bug, not a preference |
 | Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; both halves read it from `node_modules/.modules.yaml` and auto-match - re-run the installer |

@@ -59,7 +59,7 @@ window.__ModuleLoader__.load({
     // Constants
     // ---------------------------------------------------------------------
     /** Shown on the dock's bar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.1'
+    const PLUGIN_VERSION = '0.1.0-alpha.2'
     /** The header list this control joins (Open In... is -10). */
     const HEADER_SLOT = 'conversation.session.header.utilities'
     /** The root-scoped overlay list the layout package renders inside the frame. */
@@ -408,7 +408,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /** Place the dock and hand the app its room; never touches intent. */
+    /** Place the dock; never touches intent. */
     function applyGeometry(node, frame) {
       if (node === null) return
       if (frame === null) {
@@ -421,6 +421,73 @@ window.__ModuleLoader__.load({
       else delete node.dataset.suspended
       node.style.left = sidebarWidth(frame) + 'px'
       node.style.height = dock.height + 'px'
+    }
+
+    /**
+     * The two columns that make room for the dock: the MIDDLE and the RIGHT one.
+     *
+     * The left bar is deliberately not one of them. Shrinking the frame itself
+     * (the first alpha's approach) makes room for the dock by shortening the
+     * frame's only grid row, which shortens the LEFT column too - its content
+     * visibly slid up the moment the dock opened. The dock starts at the left
+     * bar's right edge, so the left bar must keep its full height and the room
+     * has to come from the two columns the dock actually spans.
+     *
+     * Both are found without hashed class names: the layout marks the right
+     * column itself (`data-rightbar-col`), the middle column is its immediately
+     * preceding sibling in the frame, and the left column is the frame's first
+     * element child (`DocumentTitle` renders no DOM, so it is not one), which is
+     * the guard that keeps this from ever insetting the left bar.
+     *
+     * @param frame - the app frame element.
+     * @returns the column elements to inset.
+     */
+    function columnsFor(frame) {
+      const columns = []
+      try {
+        const right = frame.querySelector('[data-rightbar-col]')
+        if (right === null) return columns
+        const middle = right.previousElementSibling
+        if (middle !== null && middle.nodeType === 1 && middle !== frame.children[0]) columns.push(middle)
+        columns.push(right)
+      } catch (err) {
+        /* a frame without the layout's column marker keeps the dock unhoused */
+      }
+      return columns
+    }
+
+    /**
+     * The room the dock takes, applied as those columns' own height.
+     *
+     * A height, not `padding-bottom`: the right column's panel is absolutely
+     * positioned inside it (`top:0; bottom:0`), and an absolute child's
+     * containing block is its ancestor's PADDING box - padding would leave the
+     * panel exactly where it was and the dock would cover the bottom of it.
+     * A height shortens the column itself, so the panel ends at the dock's top
+     * edge like everything else.
+     *
+     * While the dock is closed - or suspended by a fullscreen right bar - each
+     * column gets back the inline height it had before this plugin ever ran.
+     *
+     * @param frame - the app frame element (or null when it is not mounted).
+     */
+    const insets = new Map()
+
+    function applyInsets(frame) {
+      if (frame !== null) {
+        for (const column of columnsFor(frame)) {
+          if (!insets.has(column)) insets.set(column, column.style.height)
+        }
+      }
+      const bare = frame === null || !dock.open || frame.hasAttribute('data-rightbar-fullscreen')
+      const wanted = bare ? null : 'calc(100% - ' + String(dock.height) + 'px)'
+      for (const [column, saved] of insets) {
+        if (!document.contains(column)) {
+          insets.delete(column)
+          continue
+        }
+        column.style.height = wanted === null ? saved : wanted
+      }
     }
 
     // ---------------------------------------------------------------------
@@ -591,7 +658,17 @@ window.__ModuleLoader__.load({
         }
       }
 
-      /** Fit every visible slot to its host box and tell the PTY. */
+      /**
+       * Fit every visible slot to its host box, tell the PTY the new size, and
+       * leave the view on the END of the output.
+       *
+       * The scroll is not decoration: a shell prints at the end of its buffer, so
+       * a resize that keeps the old scroll position shows lines that are no
+       * longer the last ones - and after a grow the rows below the old viewport
+       * would simply be off-screen. Re-fitting also recomputes the rows/cols from
+       * the new box, which is what keeps the visible line count honest while the
+       * panel is being dragged.
+       */
       fit() {
         for (const entry of this.entries.values()) {
           if (entry.host === null || entry.host.hasAttribute('hidden')) continue
@@ -607,7 +684,17 @@ window.__ModuleLoader__.load({
               /* the next fit retries */
             }
           }
+          try {
+            entry.term.scrollToBottom()
+          } catch (err) {
+            /* an emulator without the method keeps its position */
+          }
         }
+      }
+
+      /** The panel or the viewport changed size: re-fit and follow the end. */
+      refit() {
+        this.fit()
       }
 
       /** Show one slot and hide the others. */
@@ -807,36 +894,62 @@ window.__ModuleLoader__.load({
       const [mode, setMode] = useState(appearance())
       const slots = open || sessionId === null ? slotsFor(sessionId) : []
 
-      // Geometry: place the dock and give the app its room while it is open.
+      // Geometry: place the dock, and take its room from the middle and right
+      // columns ONLY - never from the frame, whose single grid row is shared
+      // with the left bar (see `columnsFor`).
+      //
       // Deliberately NOT keyed on the revision: every status bump would run the
-      // cleanup (restoring the frame's height) and the effect again, flickering
-      // the whole app. The observer and the resize listener cover live moves.
+      // cleanup and the effect again, churning the columns' heights. The
+      // observer and the resize listener cover live moves.
       useEffect(() => {
         const node = rootRef.current
         if (node === null) return undefined
         const frame = frameFrom(node)
-        let saved = null
-        if (open && frame !== null) {
-          saved = frame.style.height
-          frame.style.height = 'calc(100% - ' + String(height) + 'px)'
-        }
         applyGeometry(node, frame)
+        applyInsets(frame)
         let observer = null
         if (open && frame !== null && typeof MutationObserver === 'function') {
-          observer = new MutationObserver(() => applyGeometry(node, frame))
+          observer = new MutationObserver(() => {
+            applyGeometry(node, frame)
+            applyInsets(frame)
+          })
           observer.observe(frame, { attributes: true, attributeFilter: ['style', 'data-rightbar-fullscreen'] })
         }
-        const onResize = () => applyGeometry(node, frame)
+        const onResize = () => {
+          applyGeometry(node, frame)
+          applyInsets(frame)
+          const runtime = runtimeRef.current
+          if (runtime !== null) runtime.refit()
+        }
         window.addEventListener('resize', onResize)
         return () => {
           window.removeEventListener('resize', onResize)
           if (observer !== null) observer.disconnect()
-          if (open && frame !== null) {
-            frame.style.height = saved === null ? '' : saved
-            applyGeometry(node, frame)
-          }
         }
       }, [open, height])
+
+      // The dock's own element must leave the columns as it found them when the
+      // plugin goes away (a restart of the app is not the only way to unload it).
+      useEffect(
+        () => () => {
+          for (const [column, saved] of insets) column.style.height = saved
+          insets.clear()
+        },
+        [],
+      )
+
+      // A drag (or a viewport change) has to reach the emulator: after the styles
+      // above are on the page, re-fit so the rows/cols match the new box and the
+      // view lands on the end of the output - otherwise the panel keeps showing
+      // the old number of lines with the last ones out of sight.
+      useEffect(() => {
+        if (!open) return undefined
+        const id = requestAnimationFrame(() => {
+          const runtime = runtimeRef.current
+          if (runtime !== null) runtime.refit()
+        })
+        return () => cancelAnimationFrame(id)
+      }, [height, open])
 
       // Appearance: ui-layout publishes it as an attribute on the body.
       useEffect(() => {

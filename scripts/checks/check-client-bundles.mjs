@@ -654,7 +654,22 @@ check('terminal dock renders closed', termDockMarkup.includes('data-dsh-terminal
 check('terminal dock closed by default', termDockMarkup.includes('data-open') === false)
 check('terminal dock draws the kit', termDockMarkup.includes('class="dst-grip"') && termDockMarkup.includes('class="dst-bar"'))
 check('terminal dock has no xterm before mount', termDockMarkup.includes('xterm') === false)
-check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.1'))
+// Two behaviours that only exist after mount, pinned at the source level because
+// a static render runs no effects:
+//
+//  1. the dock takes its room from the MIDDLE and RIGHT columns only. Shrinking
+//     the frame instead shortens its single grid row, which shortens the left bar
+//     too - its content visibly slid up the moment the dock opened (alpha.1), and
+//     the left bar must look exactly the same with the dock open;
+//  2. resizing the panel must re-fit the emulator (rows/cols) and leave the view
+//     on the END of the output, or the panel keeps the old line count with the
+//     newest lines out of sight.
+const termSource = readFileSync(path.join(repo, 'packages/dsh-terminal/lib/client.js'), 'utf8')
+check('terminal never resizes the frame', /frame(El)?\.style\.height\s*=/.test(termSource), false)
+check('terminal insets the two columns it spans', termSource.includes('previousElementSibling') && termSource.includes('frame.children[0]'))
+check('terminal gives room by column height', termSource.includes("'calc(100% - ' + String(dock.height) + 'px)'"))
+check('terminal refits on resize and follows the end', termSource.includes('refit()') && termSource.includes('scrollToBottom()'))
+check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.2'))
 
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')

@@ -1,11 +1,12 @@
-# dsh-terminal (alpha.1)
+# dsh-terminal (alpha.2)
 
 **Terminal** is a **bottom dock** for the DeepSeek Harness web GUI: a real shell,
 in the app, under the conversation. A header button — the same 28px round control
 the right bar's own toggle wears, sitting immediately right of **Open In...** —
 opens a horizontal panel that starts at the **right edge of the left bar**, runs
 to the **full width of the page**, and sits **under** the middle and right
-columns. Those columns make room for it: the app shrinks, nothing is covered.
+columns. Those two columns make room for it and **only those two**: the left bar
+keeps its full height, and nothing in it moves.
 
 Inside the panel is **xterm.js** talking to a **real PTY** over an authenticated
 WebSocket: ConPTY PowerShell on Windows, the login shell on macOS/Linux. Prompts,
@@ -49,19 +50,31 @@ nodes into a React-managed container), so it positions itself:
   `gridTemplateColumns: <sidebar>px minmax(0,1fr) <rightbar>px`, so the RESOLVED
   computed style carries the left bar's width in px. No hashed class names, and
   it follows the left bar opening, collapsing (`0`) and being dragged.
-- **Room** — while the dock is open the frame's inline height becomes
-  `calc(100% - <dock>px)`; on close the previous inline value is restored
-  exactly (React never writes `style.height` on the frame — it writes
-  `gridTemplateColumns` — so the override is stable).
+- **Room** — taken from the **middle and right columns only**, as their own
+  `height: calc(100% - <dock>px)`; on close each gets back the inline height it
+  had before this plugin ever ran. Both are found without hashed class names: the
+  layout marks the right column itself (`data-rightbar-col`), the middle column is
+  its immediately preceding sibling in the frame, and the frame's **first element
+  child** — the left bar — is explicitly never one of them.
+  - *Not the frame's height.* The frame has a single grid row, so shrinking the
+    frame shortens the left column with it: alpha.1 did exactly that, and the left
+    bar's contents visibly slid up the moment the dock opened.
+  - *Not `padding-bottom` either.* The right column's panel is absolutely
+    positioned inside it, and an absolute child is placed against its ancestor's
+    **padding** box, so padding would leave that panel where it was and the dock
+    would cover its bottom. A height shortens the column itself.
 - **Live tracking** — a `MutationObserver` on the frame's `style` attribute (a
   drag rewrites it every frame) plus a `resize` listener.
 - **Intent is separate from geometry.** `data-open` is user intent;
-  `data-suspended` is derived (a fullscreen right bar takes the viewport and the
-  dock yields). The observer only ever writes the derived one — the first spike
-  run failed exactly here, reopening the dock on the very close that restored the
-  frame's height.
-- The panel can be **dragged** by its top grip (120px … 70% of the viewport) and
-  the height is remembered in `localStorage`.
+  `data-suspended` is derived (a fullscreen right bar takes the viewport, and the
+  dock yields *and* hands the columns their height back for the duration). The
+  observer only ever writes the derived one — the first spike run failed exactly
+  here, reopening the dock on the very close that restored the frame's height.
+- **Resizing** — the grip drags the height (120px … 70% of the viewport) and it is
+  remembered in `localStorage`; every change **re-fits the emulator**: rows and
+  columns are recomputed from the new box, the new size goes to the PTY, and the
+  view is put back on the **end of the output**. A drag therefore never leaves a
+  stale screen with the wrong number of lines, and never hides the newest ones.
 
 ## What it does
 
@@ -159,7 +172,7 @@ the stylesheet.) The bundle is **generated**: never edit `lib/vendor/*` by hand.
 ## Checks
 
 ```sh
-node scripts/checks/check-client-bundles.mjs   # bundle id, both seats, order 30, markup
+node scripts/checks/check-client-bundles.mjs   # bundle id, both seats, order 30, markup, geometry invariants
 node scripts/checks/check-node-routes.mjs     # routes, etag, and a LIVE shell over a real socket
 ```
 
@@ -168,13 +181,38 @@ one (and says so when it does not): `init` → `ready` → a command answered �
 `kill`, a JSON line proven to be shell input rather than a control frame, and an
 unauthenticated upgrade refused with 401.
 
+The client check cannot run effects, so the two geometry promises are pinned at
+the source level: this bundle must never write the frame's height, it must inset
+the two columns it spans, and it must re-fit (and follow the end) on a resize.
+The behaviour itself was verified in a real browser engine while it was built —
+including that the left bar's height and contents are byte-for-byte where they
+were before the dock opened, that the middle and right columns end exactly at the
+dock's top edge, and that growing then shrinking the dock takes the visible rows
+from 13 → 16 → 6 with the newest output on screen throughout.
+
+## Alpha notes
+
+- **alpha.2** — two reports from the first run, both fixed here:
+  1. resizing the dock left the emulator at its old size, so the line count was
+     wrong and the newest output could sit out of view. Every size change now
+     re-fits (rows/cols from the new box), tells the PTY, and scrolls to the end;
+  2. opening the dock shortened the **left bar** (the frame's single grid row was
+     being shrunk with it), so its contents slid up. The room now comes from the
+     middle and right columns as their own height — the left bar is never touched,
+     and it is handed back exactly on close.
+  2 also changed the mechanism, not just the numbers: `padding-bottom` was tried
+  first and is wrong for the right column, whose panel is absolutely positioned
+  inside it against its ancestor's *padding* box.
+
 ## Known limits
 
 - One PTY per (conversation, slot); slots are capped at 8 per conversation.
 - Sessions do not survive a harness restart (they are process-local), and the
   scrollback ring is 256 KiB — older output is dropped, not paged.
-- The dock is positioned from the frame's resolved grid tracks: a harness line
-  that stops using `grid-template-columns` for the columns would need this file
-  updated (there is no layout service API for a bottom region).
+- The dock is positioned from the frame's resolved grid tracks, and the two
+  columns it insets are found from the layout's own `data-rightbar-col` marker
+  plus sibling order: a harness line that stops using `grid-template-columns` for
+  the columns, or that puts something else between the middle and right columns,
+  needs `columnsFor` updated (there is no layout service API for a bottom region).
 - A fullscreen right bar suspends the dock while it is up.
 - Windows reports `pid: null` in the first `ready` frame (see above).

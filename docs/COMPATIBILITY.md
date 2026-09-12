@@ -10,7 +10,7 @@ The pack targets the harness line DeepSeek ships to the raw web install
 | `@deepseek-ai/dsh` | `0.1.5-rc.1` |
 | Forked from | the same `0.1.5-rc.1` line (`.dsh-version.json`'s `vendoredFrom`) |
 | Install target | the web profile only (`$DSH_HOME/profiles/web`) |
-| Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell + Node.js and npm/npx - no PowerShell); the plugins themselves are plain JS and the only OS-specific code is the file-browser launcher |
+| Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell + Node.js and npm/npx - no PowerShell); the plugins themselves are plain JS and the only OS-specific code is a launcher choosing the host command: the file-browser launcher (`explorer.exe` / `open` / `xdg-open`) and the terminal's shell resolver (`pwsh.exe` or `powershell.exe` / `$SHELL` or `/bin/zsh` / `$SHELL` or `/bin/bash`) |
 | Master | **`dsh-vn-master`**, deliberately blank - the bundle layer plus one no-op `master` row; no client half, no service, no inject edge and no core-row disables |
 | Right bar | **owned by the pack** - `dsh-rightbar` / `dsh-rightbar-files` are forks of `@deepseek-ai/dsh-client-ui-sidebar-right` / `-sidebar-files`, and the core rows `ui-sidebar-right` / `ui-sidebar-files` are disabled |
 | Open In file managers | **owned by the pack** - `dsh-open-in-app` forks `@deepseek-ai/dsh-client-ui-open-in-app` (row `ui-open-in-app` disabled) and launches the OS file browser directly |
@@ -57,10 +57,14 @@ The pack targets the harness line DeepSeek ships to the raw web install
   `order: 30` in the same `conversation.session.header.utilities` list (the last
   utility, right of Open In at `-10`) toggles a horizontal panel that starts at
   the left bar's right edge, spans the page and sits **under** the middle and
-  right columns, which make room for it. Inside is vendored **xterm.js** attached
+  right columns. Those two make room for it - and only those two: the left bar
+  keeps its full height and its contents do not move. Inside is vendored
+  **xterm.js** attached
   over an authenticated WebSocket to a real **PTY** - ConPTY PowerShell on
   Windows, the login shell on macOS/Linux - so prompts, colors, `Ctrl+C` and
-  resizes all behave. It replaces nothing and publishes no service (it does not
+  resizes all behave, and every resize re-fits the emulator so the visible line
+  count matches the panel and the newest output stays in view. It replaces
+  nothing and publishes no service (it does not
   use the header corner, which the right bar's toggle owns), forks nothing and
   disables no core row.
   - The PTY is the **harness installation's own `node-pty`**, resolved (never
@@ -225,6 +229,28 @@ The pack targets the harness line DeepSeek ships to the raw web install
   connection's own authentication, checked before the socket reaches a PTY. New
   package, so the first install after this change needs a plain
   `install.bat` / `./install.sh` run or `-Force`.
+
+- **terminal alpha.2**: two things the first run got wrong.
+  1. Resizing the dock left the emulator at its old size, so the visible line
+     count was wrong and the newest output could sit out of view. Every size
+     change (grip drag or viewport) now re-fits - rows and columns recomputed from
+     the new box - sends the new size to the PTY, and scrolls back to the end of
+     the output.
+  2. Opening the dock shortened the **left bar**, so its items visibly slid up: the
+     room came from the app frame's inline height, and the frame has a single grid
+     row that the left bar shares. It now comes from the **middle and right columns
+     only**, as their own `height: calc(100% - <dock>px)`, handed back exactly on
+     close - the left bar is never touched. (Not `padding-bottom` either: the right
+     column's panel is absolutely positioned against its ancestor's *padding* box,
+     so padding would leave that panel where it was and the dock would cover its
+     bottom.)
+
+  Both are pinned by the tracked client check (`terminal never resizes the frame`,
+  `terminal refits on resize and follows the end`) and were verified in a real
+  browser engine: the left bar's height and contents are exactly where they were
+  before the dock opened, the middle and right columns end at the dock's top edge,
+  and growing then shrinking the dock takes the visible rows 13 -> 16 -> 6 with the
+  newest output on screen throughout.
 
   Installers prune both retired bundle names; upgrade by re-running
   `install.bat` / `./install.sh`, then restart the app and hard-refresh the

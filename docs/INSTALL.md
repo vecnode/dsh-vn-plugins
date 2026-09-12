@@ -186,12 +186,21 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   `node-pty` could not be resolved from the server process. The notice carries
   the reason, and `GET /api/dsh-terminal/health` reports `available:false` with
   it. Nothing else in the pack is affected.
-- **The dock opens but the panel does not make room for itself** — something
-  else is writing the app frame's inline `height` (the dock sets
-  `calc(100% - <dock>px)` while open and restores the previous value on close).
+- **The dock opens but the panel does not make room for itself** — something is
+  writing the middle/right columns' inline `height`; the dock sets
+  `calc(100% - <dock>px)` on those two while open and hands back what they had on
+  close, and it never touches the left bar.
 - **A shell's output is gone after a page reload** — the shell itself is kept for
   five minutes after its last connection, but the scrollback ring is 256 KiB:
   past that the dock opens a new shell in the same folder.
+- **The terminal shows the wrong number of lines after resizing, or the newest
+  output is not visible** — that was alpha.1; alpha.2 re-fits the emulator on
+  every size change and scrolls back to the end. Confirm the dock's bar prints
+  `dsh-terminal 0.1.0-alpha.2` or later and hard-refresh (Ctrl+F5).
+- **Opening the dock moves the items in the left bar up** — that was alpha.1
+  (the room was taken from the frame, whose single grid row the left bar shares).
+  alpha.2 takes it from the middle and right columns only. Confirm the served
+  bundle prints alpha.2 or later.
 - **`Ctrl+C` in the terminal copies instead of interrupting** — it must not: a
   bare `Ctrl+C` is SIGINT and the clipboard is `Ctrl+Shift+C` (`Cmd+C` on macOS).
   A single-key difference here is a bug, not a preference.
